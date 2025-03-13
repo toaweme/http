@@ -55,6 +55,8 @@ func (g *GinServer) Start() error {
 	log.Info("starting http server", "addr", fmt.Sprintf("http://%s", addr))
 	if err := g.http.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		log.Error("failed to start http server", "error", err)
+		
+		return fmt.Errorf("failed to start http server: %w", err)
 	}
 	
 	return nil
