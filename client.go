@@ -11,8 +11,10 @@ import (
 )
 
 type Client interface {
+	SetClient(client *http.Client)
 	Get(req GetRequest) (*Response, error)
 	Post(req PostRequest) (*Response, error)
+	Put(req PutRequest) (*Response, error)
 	Patch(req PatchRequest) (*Response, error)
 	Delete(req Request) (*Response, error)
 }
@@ -24,10 +26,11 @@ type Response struct {
 }
 
 type Request struct {
-	ID      string
-	Path    string
-	Query   url.Values
-	Headers map[string]string
+	ID        string
+	SessionID string
+	Path      string
+	Query     url.Values
+	Headers   map[string]string
 }
 
 type GetRequest struct {
@@ -41,6 +44,7 @@ type PostRequest struct {
 }
 
 type PatchRequest PostRequest
+type PutRequest PostRequest
 
 type httpClient struct {
 	baseURL string
@@ -50,16 +54,38 @@ type httpClient struct {
 	headers map[string]string
 }
 
-func NewHttpClient(baseURL, agent string, headers map[string]string) Client {
-	if headers == nil {
-		headers = make(map[string]string)
+type Config struct {
+	BaseURL     string `json:"base_url"`
+	UserAgent   string `json:"user_agent"`
+	Platform    string `json:"platform"`
+	ServiceName string `json:"service_name"`
+	AppVersion  string `json:"app_version"`
+	ClientID    string `json:"client_id"`
+	
+	Headers map[string]string `json:"headers"`
+}
+
+func NewHttpClient(config Config) Client {
+	if config.Headers == nil {
+		config.Headers = make(map[string]string)
 	}
-	headers[log.ClientAgentHeaderName] = agent
+	headers := map[string]string{
+		ClientUserAgentHeaderName:  config.UserAgent,
+		ClientPlatformHeaderName:   config.Platform,
+		ClientAppVersionHeaderName: config.AppVersion,
+		ClientIDHeaderName:         config.ClientID,
+		ServiceNameHeaderName:      config.ServiceName,
+	}
+	for k, v := range headers {
+		if v != "" {
+			config.Headers[k] = v
+		}
+	}
 	
 	return httpClient{
-		baseURL: baseURL,
 		client:  http.DefaultClient,
-		headers: headers,
+		baseURL: config.BaseURL,
+		headers: config.Headers,
 	}
 }
 
@@ -75,17 +101,25 @@ func (h httpClient) Patch(req PatchRequest) (*Response, error) {
 	return h.do(http.MethodPatch, req.Request, req.Body)
 }
 
+func (h httpClient) Put(req PutRequest) (*Response, error) {
+	return h.do(http.MethodPut, req.Request, req.Body)
+}
+
 func (h httpClient) Delete(req Request) (*Response, error) {
 	return h.do(http.MethodDelete, req, nil)
 }
 
+func (h httpClient) SetClient(client *http.Client) {
+	h.client = client
+}
+
 func (h httpClient) do(method string, req Request, body []byte) (*Response, error) {
-	log.Debug("http request", "method", method, "path", req.Path, "query", req.Query, "headers", req.Headers, "body", string(body))
-	
 	path, headers, err := h.buildRequestParams(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build request URI: %w", err)
 	}
+	
+	log.Trace("http-client", "type", "request", "url", path, "method", method, "query", req.Query, "body", string(body))
 	
 	var httpReq *http.Request
 	// prepare request
@@ -95,7 +129,7 @@ func (h httpClient) do(method string, req Request, body []byte) (*Response, erro
 		httpReq, err = http.NewRequest(method, path, nil)
 	}
 	if err != nil {
-		return nil, fmt.Errorf("failed to create DELETE request: %w", err)
+		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 	
 	// set headers
@@ -106,7 +140,7 @@ func (h httpClient) do(method string, req Request, body []byte) (*Response, erro
 	// send request
 	resp, err := h.client.Do(httpReq)
 	if err != nil {
-		return nil, fmt.Errorf("failed to send DELETE request: %w", err)
+		return nil, fmt.Errorf("failed to send request: %w", err)
 	}
 	defer resp.Body.Close()
 	
@@ -116,7 +150,7 @@ func (h httpClient) do(method string, req Request, body []byte) (*Response, erro
 		return nil, fmt.Errorf("failed to read response body: %w", err)
 	}
 	
-	log.Debug("http response", "status", resp.StatusCode, "headers", resp.Header, "body", string(data))
+	log.Trace("http-client", "type", "response", "url", path, "status", resp.StatusCode, "body", string(data))
 	
 	return &Response{
 		StatusCode: resp.StatusCode,
@@ -135,15 +169,20 @@ func (h httpClient) buildRequestParams(req Request) (string, map[string]string, 
 	}
 	
 	if req.ID != "" {
-		headers[log.ClientIDHeaderName] = req.ID
-	} else {
-		headers[log.ClientIDHeaderName] = log.ID()
+		headers[ClientRequestIDHeaderName] = req.ID
+	}
+	if req.SessionID != "" {
+		headers[ClientSessionIDHeaderName] = req.SessionID
 	}
 	
 	// prepare URL
-	path, err := url.JoinPath(h.baseURL, req.Path)
-	if err != nil {
-		return "", nil, fmt.Errorf("failed to join URL: %s: %w", req.Path, err)
+	var path = req.Path
+	var err error
+	if h.baseURL != "" {
+		path, err = url.JoinPath(h.baseURL, req.Path)
+		if err != nil {
+			return "", nil, fmt.Errorf("failed to join URL: %s: %w", req.Path, err)
+		}
 	}
 	
 	// prepare query
