@@ -41,7 +41,7 @@ const ClientRequestIDHeaderName = "X-Request-ID"
 const ServiceNameHeaderName = "X-Service-Name"
 
 // UserAgent returns a formatted user agent string
-// e.g. "awee-cli/1.0.0 (darwin; amd64)" or
+// e.g. "awee-cli/1.0.0 (darwin ?; amd64)" or
 func UserAgent(app, version, os, osVersion, arch string) string {
 	return fmt.Sprintf("%s/%s (%s %s; %s)", app, version, os, osVersion, arch)
 }
