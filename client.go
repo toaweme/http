@@ -6,7 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-
+	
 	"github.com/toaweme/log"
 )
 
@@ -39,7 +39,7 @@ type GetRequest struct {
 
 type PostRequest struct {
 	Request
-
+	
 	Body []byte
 }
 
@@ -49,9 +49,10 @@ type PutRequest PostRequest
 type httpClient struct {
 	baseURL string
 	agent   string
-
+	
 	client  *http.Client
 	headers map[string]string
+	log     bool
 }
 
 type Config struct {
@@ -61,7 +62,8 @@ type Config struct {
 	ServiceName string `json:"service_name"`
 	AppVersion  string `json:"app_version"`
 	ClientID    string `json:"client_id"`
-
+	Log         bool   `json:"log"`
+	
 	Headers map[string]string `json:"headers"`
 }
 
@@ -81,11 +83,13 @@ func NewHttpClient(config Config) Client {
 			config.Headers[k] = v
 		}
 	}
-
+	config.Log = true
+	
 	return httpClient{
 		client:  http.DefaultClient,
 		baseURL: config.BaseURL,
 		headers: config.Headers,
+		log:     config.Log,
 	}
 }
 
@@ -118,9 +122,11 @@ func (h httpClient) do(method string, req Request, body []byte) (*Response, erro
 	if err != nil {
 		return nil, fmt.Errorf("failed to build request URI: %w", err)
 	}
-
-	log.Trace("http-client", "type", "request", "url", path, "method", method, "query", req.Query, "body", string(body))
-
+	
+	if h.log {
+		log.Trace("http-client", "type", "request", "method", method, "url", path, "query", req.Query, "body", string(body))
+	}
+	
 	var httpReq *http.Request
 	// prepare request
 	if body != nil {
@@ -131,27 +137,29 @@ func (h httpClient) do(method string, req Request, body []byte) (*Response, erro
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
-
+	
 	// set headers
 	for k, v := range headers {
 		httpReq.Header.Add(k, v)
 	}
-
+	
 	// send request
 	resp, err := h.client.Do(httpReq)
 	if err != nil {
 		return nil, fmt.Errorf("failed to send request: %w", err)
 	}
 	defer resp.Body.Close()
-
+	
 	// read response body
 	data, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read response body: %w", err)
 	}
-
-	log.Trace("http-client", "type", "response", "url", path, "status", resp.StatusCode, "body", string(data))
-
+	
+	if h.log {
+		log.Trace("http-client", "type", "response", "method", method, "url", path, "status", resp.StatusCode, "body", string(data))
+	}
+	
 	return &Response{
 		StatusCode: resp.StatusCode,
 		Body:       data,
@@ -167,14 +175,14 @@ func (h httpClient) buildRequestParams(req Request) (string, map[string]string, 
 	for k, v := range req.Headers {
 		headers[k] = v
 	}
-
+	
 	if req.ID != "" {
 		headers[ClientRequestIDHeaderName] = req.ID
 	}
 	if req.SessionID != "" {
 		headers[ClientSessionIDHeaderName] = req.SessionID
 	}
-
+	
 	// prepare URL
 	var path = req.Path
 	var err error
@@ -184,12 +192,12 @@ func (h httpClient) buildRequestParams(req Request) (string, map[string]string, 
 			return "", nil, fmt.Errorf("failed to join URL: %s: %w", req.Path, err)
 		}
 	}
-
+	
 	// prepare query
 	query := req.Query.Encode()
 	if query != "" {
 		path += "?" + query
 	}
-
+	
 	return path, headers, nil
 }
