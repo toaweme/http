@@ -118,6 +118,15 @@ func (h httpClient) SetClient(client *http.Client) {
 	h.client = client
 }
 
+func limitBodySize(body []byte, maxSize int64) string {
+	if int64(len(body)) > maxSize {
+		return string(body[:maxSize]) + "..."
+	}
+	return string(body)
+}
+
+const size = 100
+
 func (h httpClient) do(ctx context.Context, method string, req Request, body []byte) (*Response, error) {
 	path, headers, err := h.buildRequestParams(req)
 	if err != nil {
@@ -125,7 +134,7 @@ func (h httpClient) do(ctx context.Context, method string, req Request, body []b
 	}
 
 	if h.log {
-		log.Trace("http-client", "type", "request", "method", method, "url", path, "query", req.Query, "body", string(body))
+		log.Trace("http-client", "type", "request", "method", method, "url", path, "query", req.Query, "body", limitBodySize(body, size))
 	}
 
 	var httpReq *http.Request
@@ -158,7 +167,7 @@ func (h httpClient) do(ctx context.Context, method string, req Request, body []b
 	}
 
 	if h.log {
-		log.Trace("http-client", "type", "response", "method", method, "url", path, "status", resp.StatusCode, "body", string(data))
+		log.Trace("http-client", "type", "response", "method", method, "url", path, "status", resp.StatusCode, "body", limitBodySize(data, size))
 	}
 
 	return &Response{
