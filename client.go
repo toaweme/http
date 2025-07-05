@@ -134,7 +134,7 @@ func (h httpClient) do(ctx context.Context, method string, req Request, body []b
 	}
 
 	if h.log {
-		log.Trace("http-client", "type", "request", "method", method, "url", path, "query", req.Query, "body", limitBodySize(body, size))
+		log.Trace("http-client", "type", "request", "method", method, "headers", headers, "url", path, "query", req.Query, "body", string(body))
 	}
 
 	var httpReq *http.Request
@@ -167,7 +167,7 @@ func (h httpClient) do(ctx context.Context, method string, req Request, body []b
 	}
 
 	if h.log {
-		log.Trace("http-client", "type", "response", "method", method, "url", path, "status", resp.StatusCode, "body", limitBodySize(data, size))
+		log.Trace("http-client", "type", "response", "method", method, "url", path, "status", resp.StatusCode, "body", string(data))
 	}
 
 	return &Response{
