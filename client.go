@@ -84,7 +84,6 @@ func NewHttpClient(config Config) Client {
 			config.Headers[k] = v
 		}
 	}
-	config.Log = true
 
 	return httpClient{
 		client:  http.DefaultClient,
