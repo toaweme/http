@@ -202,9 +202,9 @@ func (h httpClient) doStream(ctx context.Context, method string, stream chan Str
 		return fmt.Errorf("failed to build request URI: %w", err)
 	}
 
-	// if h.log {
-	log.Trace("http-client", "type", "stream-request", "method", method, "headers", headers, "url", path, "query", req.Query, "body", string(body))
-	// }
+	if h.log {
+		log.Trace("http-client", "type", "stream-request", "method", method, "headers", headers, "url", path, "query", req.Query, "body", string(body))
+	}
 
 	var bodyBuffer *bytes.Buffer
 	if body != nil {
@@ -246,7 +246,9 @@ func (h httpClient) doStream(ctx context.Context, method string, stream chan Str
 		return fmt.Errorf("unexpected status code: %d", resp.StatusCode)
 	}
 
-	log.Trace("http-client", "type", "stream-response", "method", method, "url", path, "status", resp.StatusCode)
+	if h.log {
+		log.Trace("http-client", "type", "stream-response", "method", method, "url", path, "status", resp.StatusCode)
+	}
 
 	go func() {
 		defer resp.Body.Close()
@@ -255,7 +257,9 @@ func (h httpClient) doStream(ctx context.Context, method string, stream chan Str
 		reader := bufio.NewReader(resp.Body)
 		for {
 			line, err := reader.ReadBytes('\n')
-			log.Trace("http-client", "type", "stream-response", "method", method, "url", path, "status", resp.StatusCode, "body", string(line))
+			if h.log {
+				log.Trace("http-client", "type", "stream-response", "method", method, "url", path, "status", resp.StatusCode, "body", string(line))
+			}
 			if err != nil {
 				if errors.Is(err, io.EOF) {
 					stream <- StreamResponse{
