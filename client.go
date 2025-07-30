@@ -31,11 +31,23 @@ type Response struct {
 	Error      error
 }
 
+type StreamResponseType string
+
+const (
+	StreamResponseTypeEOF     StreamResponseType = "EOF"
+	StreamResponseTypeData    StreamResponseType = "DATA"
+	StreamResponseTypeEvent   StreamResponseType = "EVENT"
+	StreamResponseTypeID      StreamResponseType = "ID"
+	StreamResponseTypeRetry   StreamResponseType = "RETRY"
+	StreamResponseTypeComment StreamResponseType = "COMMENT"
+)
+
 type StreamResponse struct {
 	StatusCode int
 	Body       []byte
 	Headers    http.Header
 	Error      error
+	Type       StreamResponseType
 }
 
 type Request struct {
@@ -237,6 +249,7 @@ func (h httpClient) doStream(ctx context.Context, method string, stream chan Str
 			return fmt.Errorf("failed to read error response body: %w", err)
 		}
 		stream <- StreamResponse{
+			Type:       StreamResponseTypeEOF,
 			StatusCode: resp.StatusCode,
 			Headers:    resp.Header,
 			Error:      fmt.Errorf("unexpected status code: %d", resp.StatusCode),
@@ -263,6 +276,7 @@ func (h httpClient) doStream(ctx context.Context, method string, stream chan Str
 			if err != nil {
 				if errors.Is(err, io.EOF) {
 					stream <- StreamResponse{
+						Type:       StreamResponseTypeEOF,
 						StatusCode: resp.StatusCode,
 						Headers:    resp.Header,
 						Error:      fmt.Errorf("failed to read response body: %w", err),
@@ -273,7 +287,39 @@ func (h httpClient) doStream(ctx context.Context, method string, stream chan Str
 				}
 				break
 			}
+
+			resType := StreamResponseTypeData
+			if bytes.HasPrefix(line, []byte("data: ")) {
+				line = bytes.TrimPrefix(line, []byte("data: "))
+				if bytes.Equal(line, []byte("[DONE]")) {
+					stream <- StreamResponse{
+						Type:       StreamResponseTypeEOF,
+						StatusCode: resp.StatusCode,
+						Headers:    resp.Header,
+						Error:      fmt.Errorf("failed to read response body: %w", err),
+					}
+					return
+				}
+			} else if bytes.HasPrefix(line, []byte("event: ")) {
+				resType = StreamResponseTypeEvent
+				line = bytes.TrimPrefix(line, []byte("event: "))
+			} else if bytes.HasPrefix(line, []byte("id: ")) {
+				resType = StreamResponseTypeID
+				line = bytes.TrimPrefix(line, []byte("id: "))
+			} else if bytes.HasPrefix(line, []byte("retry: ")) {
+				resType = StreamResponseTypeRetry
+				line = bytes.TrimPrefix(line, []byte("retry: "))
+			} else if bytes.HasPrefix(line, []byte(":")) {
+				resType = StreamResponseTypeComment
+			}
+
+			line = bytes.TrimSpace(line)
+			if len(line) == 0 {
+				continue
+			}
+
 			stream <- StreamResponse{
+				Type:       resType,
 				StatusCode: resp.StatusCode,
 				Headers:    resp.Header,
 				Body:       line,
