@@ -289,6 +289,13 @@ func (h httpClient) doStream(ctx context.Context, method string, stream chan Str
 			}
 
 			resType := StreamResponseTypeData
+			line = bytes.TrimSpace(line)
+			if len(line) == 0 {
+				continue
+			}
+			if h.log {
+				log.Trace("http-client", "type", "stream-response", "body", string(line))
+			}
 			if bytes.HasPrefix(line, []byte("data: ")) {
 				line = bytes.TrimPrefix(line, []byte("data: "))
 				if bytes.Equal(line, []byte("[DONE]")) {
@@ -296,7 +303,6 @@ func (h httpClient) doStream(ctx context.Context, method string, stream chan Str
 						Type:       StreamResponseTypeEOF,
 						StatusCode: resp.StatusCode,
 						Headers:    resp.Header,
-						Error:      fmt.Errorf("failed to read response body: %w", err),
 					}
 					return
 				}
@@ -311,11 +317,6 @@ func (h httpClient) doStream(ctx context.Context, method string, stream chan Str
 				line = bytes.TrimPrefix(line, []byte("retry: "))
 			} else if bytes.HasPrefix(line, []byte(":")) {
 				resType = StreamResponseTypeComment
-			}
-
-			line = bytes.TrimSpace(line)
-			if len(line) == 0 {
-				continue
 			}
 
 			stream <- StreamResponse{
