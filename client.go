@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"bytes"
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -214,8 +213,10 @@ func (h httpClient) doStream(ctx context.Context, method string, stream chan Str
 		return fmt.Errorf("failed to build request URI: %w", err)
 	}
 
+	logger := log.Logger.With("type", "stream-request", "method", method, "url", path, "query", req.Query, "req-body", limitBodySize(body, size))
+
 	if h.log {
-		log.Trace("http-client", "type", "stream-request", "method", method, "headers", headers, "url", path, "query", req.Query, "body", string(body))
+		logger.Debug("http-client")
 	}
 
 	var bodyBuffer *bytes.Buffer
@@ -239,28 +240,43 @@ func (h httpClient) doStream(ctx context.Context, method string, stream chan Str
 		return fmt.Errorf("failed to send request: %w", err)
 	}
 
+	logger = logger.With("status", resp.StatusCode)
+
+	if h.log {
+		logger.Debug("http-client", "request", "sent")
+	}
+
 	if resp.StatusCode != http.StatusOK {
 		defer resp.Body.Close()
-		body, err := io.ReadAll(resp.Body)
+		defer close(stream)
+		respBody, err := io.ReadAll(resp.Body)
 		if err != nil {
+			err = fmt.Errorf("failed to read error response body: %w", err)
 			if h.log {
-				log.Error("http-client", "type", "stream-response", "method", method, "url", path, "status", resp.StatusCode, "error", err)
+				logger.Error("http-client", "error", err)
 			}
-			return fmt.Errorf("failed to read error response body: %w", err)
+			return err
 		}
+
+		err = fmt.Errorf("unexpected status code: %d: %s", resp.StatusCode, string(respBody))
+
+		if h.log {
+			logger.Error("http-client", "stream", "started-with-error", "status", resp.StatusCode, "error", err)
+		}
+
 		stream <- StreamResponse{
 			Type:       StreamResponseTypeEOF,
 			StatusCode: resp.StatusCode,
 			Headers:    resp.Header,
-			Error:      fmt.Errorf("unexpected status code: %d", resp.StatusCode),
-			Body:       body,
+			Error:      err,
+			Body:       respBody,
 		}
 
-		return fmt.Errorf("unexpected status code: %d", resp.StatusCode)
+		return err
 	}
 
 	if h.log {
-		log.Trace("http-client", "type", "stream-response", "method", method, "url", path, "status", resp.StatusCode)
+		logger.Debug("http-client", "stream", "started")
 	}
 
 	go func() {
@@ -271,30 +287,31 @@ func (h httpClient) doStream(ctx context.Context, method string, stream chan Str
 		for {
 			line, err := reader.ReadBytes('\n')
 			if h.log {
-				log.Trace("http-client", "type", "stream-response", "method", method, "url", path, "status", resp.StatusCode, "body", string(line))
+				logger.Debug("http-client", "raw-line", string(line))
 			}
 			if err != nil {
-				if errors.Is(err, io.EOF) {
-					stream <- StreamResponse{
-						Type:       StreamResponseTypeEOF,
-						StatusCode: resp.StatusCode,
-						Headers:    resp.Header,
-						Error:      fmt.Errorf("failed to read response body: %w", err),
-					}
-					if h.log {
-						log.Error("http-client", "type", "stream-response", "method", method, "url", path, "status", resp.StatusCode, "error", err)
-					}
+				stream <- StreamResponse{
+					Type:       StreamResponseTypeEOF,
+					StatusCode: resp.StatusCode,
+					Headers:    resp.Header,
+					Error:      fmt.Errorf("failed to read response body: %w", err),
+				}
+				if h.log {
+					logger.Error("http-client", "stream", "ended-with-error", "error", err)
 				}
 				break
 			}
 
 			resType := StreamResponseTypeData
 			line = bytes.TrimSpace(line)
+
+			logger = logger.With("type", resType)
+
 			if len(line) == 0 {
 				continue
 			}
 			if h.log {
-				log.Trace("http-client", "type", "stream-response", "body", string(line))
+				logger.Debug("http-client", "pre-processed-line", string(line))
 			}
 			if bytes.HasPrefix(line, []byte("data: ")) {
 				line = bytes.TrimPrefix(line, []byte("data: "))
@@ -326,7 +343,7 @@ func (h httpClient) doStream(ctx context.Context, method string, stream chan Str
 				Body:       line,
 			}
 			if h.log {
-				log.Trace("http-client", "type", "stream-response", "method", method, "url", path, "status", resp.StatusCode, "body", string(line))
+				logger.Debug("http-client", "sse-processed-line", string(line))
 			}
 		}
 	}()
