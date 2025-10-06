@@ -305,13 +305,11 @@ func (h httpClient) doStream(ctx context.Context, method string, stream chan Str
 			resType := StreamResponseTypeData
 			line = bytes.TrimSpace(line)
 
-			logger = logger.With("type", resType)
-
 			if len(line) == 0 {
 				continue
 			}
 			if h.log {
-				logger.Debug("http-client", "pre-processed-line", string(line))
+				logger.Debug("http-client", "type", resType, "pre-processed-line", string(line))
 			}
 			if bytes.HasPrefix(line, []byte("data: ")) {
 				line = bytes.TrimPrefix(line, []byte("data: "))
@@ -343,7 +341,7 @@ func (h httpClient) doStream(ctx context.Context, method string, stream chan Str
 				Body:       line,
 			}
 			if h.log {
-				logger.Debug("http-client", "sse-processed-line", string(line))
+				logger.Debug("http-client", "type", resType, "sse-processed-line", string(line))
 			}
 		}
 	}()
