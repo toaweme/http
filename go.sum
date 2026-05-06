@@ -1,2 +1,4 @@
 github.com/toaweme/log v0.0.0-20250901152047-4506ca7f93bd h1:a5ufJR9MhLKWd5Sb2pBrKxd1Dm+zlXqxUR9FtPNR7dg=
 github.com/toaweme/log v0.0.0-20250901152047-4506ca7f93bd/go.mod h1:1Wo5Aexza8MvKyoAYzMH5NyXOFxgvT9LMdC8erOGhcU=
+github.com/toaweme/log v0.0.0-20260118181930-c65718604628 h1:70+9kE3J18G8C+khZ64aMMwNkbAUAwPjcGoTeLtZ+ZM=
+github.com/toaweme/log v0.0.0-20260118181930-c65718604628/go.mod h1:1Wo5Aexza8MvKyoAYzMH5NyXOFxgvT9LMdC8erOGhcU=
