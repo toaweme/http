@@ -1,2 +1,4 @@
+github.com/go-chi/chi/v5 v5.2.5 h1:Eg4myHZBjyvJmAFjFvWgrqDTXFyOzjj7YIm3L3mu6Ug=
+github.com/go-chi/chi/v5 v5.2.5/go.mod h1:X7Gx4mteadT3eDOMTsXzmI4/rwUpOwBHLpAfupzFJP0=
 github.com/toaweme/log v0.0.0-20260118181930-c65718604628 h1:70+9kE3J18G8C+khZ64aMMwNkbAUAwPjcGoTeLtZ+ZM=
 github.com/toaweme/log v0.0.0-20260118181930-c65718604628/go.mod h1:1Wo5Aexza8MvKyoAYzMH5NyXOFxgvT9LMdC8erOGhcU=

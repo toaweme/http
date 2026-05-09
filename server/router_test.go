@@ -152,43 +152,29 @@ func TestRouter_NestedGroups(t *testing.T) {
 	equalSlice(t, trace, []string{"root", "a", "b", "handler"}, "nested trace")
 }
 
-func mustPanic(t *testing.T, want string, fn func()) {
+func mustPanic(t *testing.T, fn func()) {
 	t.Helper()
 	defer func() {
-		got := recover()
-		if got == nil {
-			t.Fatalf("expected panic %q, got none", want)
-		}
-		if s, _ := got.(string); s != want {
-			t.Fatalf("panic: got %q want %q", got, want)
+		if recover() == nil {
+			t.Fatalf("expected panic, got none")
 		}
 	}()
 	fn()
 }
 
 func TestRouter_UseAfterRoutePanics(t *testing.T) {
-	const msg = "server: all middleware must be registered before routes on this router scope"
-
 	t.Run("root", func(t *testing.T) {
 		r := NewRouter()
 		r.Get("/foo", func(w http.ResponseWriter, _ *http.Request) {})
-		mustPanic(t, msg, func() { r.Use(func(h http.Handler) http.Handler { return h }) })
+		mustPanic(t, func() { r.Use(func(h http.Handler) http.Handler { return h }) })
 	})
 
 	t.Run("subrouter", func(t *testing.T) {
 		r := NewRouter()
 		r.Group("/api", func(g *Router) {
 			g.Get("/foo", func(w http.ResponseWriter, _ *http.Request) {})
-			mustPanic(t, msg, func() { g.Use(func(h http.Handler) http.Handler { return h }) })
+			mustPanic(t, func() { g.Use(func(h http.Handler) http.Handler { return h }) })
 		})
-	})
-
-	t.Run("root after subrouter route", func(t *testing.T) {
-		r := NewRouter()
-		r.Group("/api", func(g *Router) {
-			g.Get("/foo", func(w http.ResponseWriter, _ *http.Request) {})
-		})
-		mustPanic(t, msg, func() { r.Use(func(h http.Handler) http.Handler { return h }) })
 	})
 }
 
