@@ -17,6 +17,7 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/toaweme/log"
 )
 
 type Router struct {
@@ -25,6 +26,13 @@ type Router struct {
 
 func NewRouter() *Router {
 	return &Router{chi: chi.NewRouter()}
+}
+
+func (r *Router) LogRoutes() {
+	chi.Walk(r.chi, func(method string, route string, handler http.Handler, middlewares ...func(http.Handler) http.Handler) error {
+		log.Info("chi", "method", method, "route", route, "handler", handler, "middlewares", len(middlewares))
+		return nil
+	})
 }
 
 // Use appends middleware to this router's scope. chi panics if called after

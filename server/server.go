@@ -36,6 +36,8 @@ func (s *Server) Start() error {
 		Handler: s.router,
 	}
 
+	s.router.LogRoutes()
+
 	log.Info("service", "http", "server", "addr", fmt.Sprintf("http://%s", addr))
 	if err := s.http.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		log.Error("failed to start http server", "error", err)
