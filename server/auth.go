@@ -8,7 +8,7 @@ import (
 
 // ErrUnauthorized is returned by Authorizer.Authorize when the caller lacks
 // permission. Map to HTTP 403 in handlers.
-var ErrUnauthorized = errors.New("server: unauthorized")
+var ErrUnauthorized = errors.New("unauthorized")
 
 // Action names the operation being checked by an Authorizer.
 type Action string
