@@ -5,11 +5,13 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/toaweme/log"
 )
 
 func TestAuthMiddleware_MissingHeader(t *testing.T) {
 	r := NewRouter()
-	r.Use(AuthMiddleware(func(string) (*Claims, error) { return &Claims{OrgID: "o", UserID: "u"}, nil }))
+	r.Use(AuthMiddleware(func(string) (*Claims, error) { return &Claims{OrgID: "o", UserID: "u"}, nil }, log.NewExtendedLogger(log.Logger)))
 	Register(r, []Route{{Method: "GET", Pattern: "/x", Handler: http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})}})
@@ -23,7 +25,7 @@ func TestAuthMiddleware_MissingHeader(t *testing.T) {
 
 func TestAuthMiddleware_ExtractorError(t *testing.T) {
 	r := NewRouter()
-	r.Use(AuthMiddleware(func(string) (*Claims, error) { return nil, errors.New("bad") }))
+	r.Use(AuthMiddleware(func(string) (*Claims, error) { return nil, errors.New("bad") }, log.NewExtendedLogger(log.Logger)))
 	Register(r, []Route{{Method: "GET", Pattern: "/x", Handler: http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal("handler should not be called")
 	})}})
@@ -44,7 +46,7 @@ func TestAuthMiddleware_InjectsContext(t *testing.T) {
 			return nil, errors.New("nope")
 		}
 		return &Claims{OrgID: "org-1", UserID: "user-1", Scopes: []string{"read"}}, nil
-	}))
+	}, log.NewExtendedLogger(log.Logger)))
 	var gotOrg, gotUser string
 	var gotScopes []string
 	Register(r, []Route{{Method: "GET", Pattern: "/x", Handler: http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
