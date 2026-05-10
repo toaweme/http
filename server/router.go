@@ -10,10 +10,8 @@ package server
 //   - middleware wraps the dispatch, so 404s, 405s, and CORS preflights flow
 //     through the chain (matching what we already had).
 //
-// Handler-side compatibility: chi keeps URL params in its own context, but
-// our handlers call r.PathValue("name"). withPathValues copies chi's params
-// into r.SetPathValue right before the handler runs, so handler code is
-// unchanged.
+// Handlers read path params via server.Param / server.Wildcard so they don't
+// import chi directly.
 
 import (
 	"net/http"
@@ -52,7 +50,7 @@ func (r *Router) With(mw ...func(http.Handler) http.Handler) *Router {
 // which mirrors stdlib's {name} placeholders for single segments and adds a
 // trailing /* for catch-all.
 func (r *Router) Handle(method, pattern string, h http.Handler) {
-	r.chi.Method(method, pattern, withPathValues(h))
+	r.chi.Method(method, pattern, h)
 }
 
 func (r *Router) Get(p string, h http.HandlerFunc)    { r.Handle("GET", p, h) }
@@ -63,20 +61,4 @@ func (r *Router) Patch(p string, h http.HandlerFunc)  { r.Handle("PATCH", p, h) 
 
 func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	r.chi.ServeHTTP(w, req)
-}
-
-// withPathValues mirrors chi's URL params into r.SetPathValue so handlers
-// can keep using stdlib's r.PathValue("name") regardless of the router.
-func withPathValues(h http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if rctx := chi.RouteContext(r.Context()); rctx != nil {
-			for i, k := range rctx.URLParams.Keys {
-				if k == "*" {
-					continue
-				}
-				r.SetPathValue(k, rctx.URLParams.Values[i])
-			}
-		}
-		h.ServeHTTP(w, r)
-	})
 }

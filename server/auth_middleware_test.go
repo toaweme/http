@@ -70,7 +70,7 @@ func TestRouter_PathParams(t *testing.T) {
 	r := NewRouter()
 	var gotID string
 	Register(r, []Route{{Method: "GET", Pattern: "/items/{id}", Handler: http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-		gotID = req.PathValue("id")
+		gotID = Param(req, "id")
 		w.WriteHeader(http.StatusOK)
 	})}})
 
