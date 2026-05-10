@@ -30,7 +30,7 @@ func NewRouter() *Router {
 
 func (r *Router) LogRoutes() {
 	chi.Walk(r.chi, func(method string, route string, handler http.Handler, middlewares ...func(http.Handler) http.Handler) error {
-		log.Info("chi", "method", method, "route", route, "handler", handler, "middlewares", len(middlewares))
+		log.Info("chi", "route", route, "method", method, "middlewares", len(middlewares))
 		return nil
 	})
 }
