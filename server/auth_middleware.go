@@ -15,7 +15,7 @@ func AuthMiddleware(extract ClaimsExtractor, logger log.Slog) func(http.Handler)
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			token, ok := bearerToken(r.Header.Get("Authorization"))
 			if !ok {
-				logger.Warn("server", "auth", "error", "missing authorization header")
+				logger.Warn("server", "auth", "error", "error", "missing authorization header")
 				WriteError(w, http.StatusUnauthorized, errors.New("missing authorization header"))
 				return
 			}
@@ -26,7 +26,7 @@ func AuthMiddleware(extract ClaimsExtractor, logger log.Slog) func(http.Handler)
 				if err != nil {
 					msg = msg + ": " + err.Error()
 				}
-				logger.Warn("server", "auth", "error", msg)
+				logger.Warn("server", "auth", "error", "error", msg)
 				WriteError(w, http.StatusUnauthorized, errors.New(msg))
 				return
 			}
