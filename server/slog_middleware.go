@@ -6,8 +6,6 @@ import (
 	"net/http"
 	"strings"
 	"time"
-
-	"github.com/toaweme/log"
 )
 
 // SlogConfig controls what the SlogMiddleware emits on each request.
@@ -28,7 +26,7 @@ type SlogConfig struct {
 
 // SlogMiddleware logs method, url and duration for every request, plus
 // optionally the request and response bodies when the config opts in.
-func SlogMiddleware(cfg SlogConfig, logger log.Slog) func(http.Handler) http.Handler {
+func SlogMiddleware(cfg SlogConfig, logger Logger) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			start := time.Now()

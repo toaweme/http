@@ -3,14 +3,12 @@ package server
 import (
 	"errors"
 	"net/http"
-
-	"github.com/toaweme/log"
 )
 
 // AuthMiddleware extracts the Bearer token, runs extract to parse it into
 // Claims, injects OrgID/UserID/Scopes into the request context, and aborts
 // with HTTP 401 on missing/invalid header or extractor failure.
-func AuthMiddleware(extract ClaimsExtractor, logger log.Slog) func(http.Handler) http.Handler {
+func AuthMiddleware(extract ClaimsExtractor, logger Logger) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			token, ok := bearerToken(r.Header.Get("Authorization"))

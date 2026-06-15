@@ -17,7 +17,6 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/toaweme/log"
 )
 
 type Router struct {
@@ -28,9 +27,9 @@ func NewRouter() *Router {
 	return &Router{chi: chi.NewRouter()}
 }
 
-func (r *Router) LogRoutes() {
+func (r *Router) LogRoutes(logger Logger) {
 	chi.Walk(r.chi, func(method string, route string, handler http.Handler, middlewares ...func(http.Handler) http.Handler) error {
-		log.Info("chi", "route", route, "method", method, "middlewares", len(middlewares))
+		logger.Info("chi", "route", route, "method", method, "middlewares", len(middlewares))
 		return nil
 	})
 }

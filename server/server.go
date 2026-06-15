@@ -5,8 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-
-	"github.com/toaweme/log"
 )
 
 // Config configures a Server's listen address.
@@ -20,11 +18,14 @@ type Config struct {
 type Server struct {
 	config Config
 	router *Router
+	logger Logger
 	http   *http.Server
 }
 
-func NewServer(cfg Config, router *Router) *Server {
-	return &Server{config: cfg, router: router}
+// NewServer wires a Server around the router. A github.com/toaweme/log logger
+// can be injected directly, or a null logger to discard output.
+func NewServer(cfg Config, router *Router, logger Logger) *Server {
+	return &Server{config: cfg, router: router, logger: logger}
 }
 
 func (s *Server) Name() string { return "http" }
@@ -36,11 +37,11 @@ func (s *Server) Start() error {
 		Handler: s.router,
 	}
 
-	s.router.LogRoutes()
+	s.router.LogRoutes(s.logger)
 
-	log.Info("service", "http", "server", "addr", fmt.Sprintf("http://%s", addr))
+	s.logger.Info("service", "http", "server", "addr", fmt.Sprintf("http://%s", addr))
 	if err := s.http.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-		log.Error("failed to start http server", "error", err)
+		s.logger.Error("service", "http", "server", "error", err)
 		return err
 	}
 	return nil
