@@ -17,7 +17,7 @@ func (nopLogger) Info(string, ...any)  {}
 func (nopLogger) Warn(string, ...any)  {}
 func (nopLogger) Error(string, ...any) {}
 
-func TestAuthMiddleware_MissingHeader(t *testing.T) {
+func Test_AuthMiddleware_MissingHeader(t *testing.T) {
 	r := NewRouter()
 	r.Use(AuthMiddleware(func(string) (*Claims, error) { return &Claims{OrgID: "o", UserID: "u"}, nil }, nopLogger{}))
 	Register(r, []Route{{Method: "GET", Pattern: "/x", Handler: http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -25,20 +25,20 @@ func TestAuthMiddleware_MissingHeader(t *testing.T) {
 	})}})
 
 	w := httptest.NewRecorder()
-	r.ServeHTTP(w, httptest.NewRequest("GET", "/x", nil))
+	r.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/x", http.NoBody))
 	if w.Code != http.StatusUnauthorized {
 		t.Fatalf("missing header: want 401 got %d", w.Code)
 	}
 }
 
-func TestAuthMiddleware_ExtractorError(t *testing.T) {
+func Test_AuthMiddleware_ExtractorError(t *testing.T) {
 	r := NewRouter()
 	r.Use(AuthMiddleware(func(string) (*Claims, error) { return nil, errors.New("bad") }, nopLogger{}))
 	Register(r, []Route{{Method: "GET", Pattern: "/x", Handler: http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal("handler should not be called")
 	})}})
 
-	req := httptest.NewRequest("GET", "/x", nil)
+	req := httptest.NewRequest(http.MethodGet, "/x", http.NoBody)
 	req.Header.Set("Authorization", "Bearer abc")
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
@@ -47,7 +47,7 @@ func TestAuthMiddleware_ExtractorError(t *testing.T) {
 	}
 }
 
-func TestAuthMiddleware_InjectsContext(t *testing.T) {
+func Test_AuthMiddleware_InjectsContext(t *testing.T) {
 	r := NewRouter()
 	r.Use(AuthMiddleware(func(token string) (*Claims, error) {
 		if token != "abc" {
@@ -64,7 +64,7 @@ func TestAuthMiddleware_InjectsContext(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	})}})
 
-	req := httptest.NewRequest("GET", "/x", nil)
+	req := httptest.NewRequest(http.MethodGet, "/x", http.NoBody)
 	req.Header.Set("Authorization", "Bearer abc")
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
@@ -76,7 +76,7 @@ func TestAuthMiddleware_InjectsContext(t *testing.T) {
 	}
 }
 
-func TestRouter_PathParams(t *testing.T) {
+func Test_Router_PathParams(t *testing.T) {
 	r := NewRouter()
 	var gotID string
 	Register(r, []Route{{Method: "GET", Pattern: "/items/{id}", Handler: http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
@@ -85,7 +85,7 @@ func TestRouter_PathParams(t *testing.T) {
 	})}})
 
 	w := httptest.NewRecorder()
-	r.ServeHTTP(w, httptest.NewRequest("GET", "/items/42", nil))
+	r.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/items/42", http.NoBody))
 	if w.Code != http.StatusOK || gotID != "42" {
 		t.Fatalf("want 200 id=42 got code=%d id=%q", w.Code, gotID)
 	}

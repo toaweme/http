@@ -26,7 +26,7 @@ func equalSlice(t *testing.T, got, want []string, msg string) {
 	}
 }
 
-func TestRouter_RootMiddlewareWrapsMux(t *testing.T) {
+func Test_Router_RootMiddlewareWrapsMux(t *testing.T) {
 	t.Run("runs on matched routes", func(t *testing.T) {
 		var trace []string
 		r := NewRouter()
@@ -37,7 +37,7 @@ func TestRouter_RootMiddlewareWrapsMux(t *testing.T) {
 		})
 
 		rec := httptest.NewRecorder()
-		r.ServeHTTP(rec, httptest.NewRequest("GET", "/foo", nil))
+		r.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/foo", http.NoBody))
 
 		if rec.Code != http.StatusOK {
 			t.Fatalf("status: got %d want 200", rec.Code)
@@ -54,7 +54,7 @@ func TestRouter_RootMiddlewareWrapsMux(t *testing.T) {
 		r.Get("/foo", func(w http.ResponseWriter, _ *http.Request) {})
 
 		rec := httptest.NewRecorder()
-		r.ServeHTTP(rec, httptest.NewRequest("OPTIONS", "/foo", nil))
+		r.ServeHTTP(rec, httptest.NewRequest(http.MethodOptions, "/foo", http.NoBody))
 
 		equalSlice(t, trace, []string{"root"}, "root middleware should run on 405s")
 		if rec.Code != http.StatusMethodNotAllowed {
@@ -69,7 +69,7 @@ func TestRouter_RootMiddlewareWrapsMux(t *testing.T) {
 		r.Get("/foo", func(w http.ResponseWriter, _ *http.Request) {})
 
 		rec := httptest.NewRecorder()
-		r.ServeHTTP(rec, httptest.NewRequest("GET", "/nope", nil))
+		r.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/nope", http.NoBody))
 
 		equalSlice(t, trace, []string{"root"}, "trace")
 		if rec.Code != http.StatusNotFound {
@@ -78,7 +78,7 @@ func TestRouter_RootMiddlewareWrapsMux(t *testing.T) {
 	})
 }
 
-func TestRouter_GroupScopedMiddleware(t *testing.T) {
+func Test_Router_GroupScopedMiddleware(t *testing.T) {
 	var trace []string
 	r := NewRouter()
 	r.Use(tag("root", &trace))
@@ -97,19 +97,19 @@ func TestRouter_GroupScopedMiddleware(t *testing.T) {
 	t.Run("scoped middleware runs on group routes", func(t *testing.T) {
 		trace = nil
 		rec := httptest.NewRecorder()
-		r.ServeHTTP(rec, httptest.NewRequest("GET", "/api/foo", nil))
+		r.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/foo", http.NoBody))
 		equalSlice(t, trace, []string{"root", "scoped", "handler"}, "trace")
 	})
 
 	t.Run("scoped middleware does NOT run on routes outside the group", func(t *testing.T) {
 		trace = nil
 		rec := httptest.NewRecorder()
-		r.ServeHTTP(rec, httptest.NewRequest("GET", "/bare", nil))
+		r.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/bare", http.NoBody))
 		equalSlice(t, trace, []string{"root", "bare"}, "trace")
 	})
 }
 
-func TestRouter_WithScopedMiddleware(t *testing.T) {
+func Test_Router_WithScopedMiddleware(t *testing.T) {
 	var trace []string
 	r := NewRouter()
 	r.Use(tag("root", &trace))
@@ -123,16 +123,16 @@ func TestRouter_WithScopedMiddleware(t *testing.T) {
 
 	trace = nil
 	rec := httptest.NewRecorder()
-	r.ServeHTTP(rec, httptest.NewRequest("GET", "/scoped", nil))
+	r.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/scoped", http.NoBody))
 	equalSlice(t, trace, []string{"root", "with", "scoped-handler"}, "scoped trace")
 
 	trace = nil
 	rec = httptest.NewRecorder()
-	r.ServeHTTP(rec, httptest.NewRequest("GET", "/plain", nil))
+	r.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/plain", http.NoBody))
 	equalSlice(t, trace, []string{"root", "plain-handler"}, "plain trace")
 }
 
-func TestRouter_NestedGroups(t *testing.T) {
+func Test_Router_NestedGroups(t *testing.T) {
 	var trace []string
 	r := NewRouter()
 	r.Use(tag("root", &trace))
@@ -148,7 +148,7 @@ func TestRouter_NestedGroups(t *testing.T) {
 	})
 
 	rec := httptest.NewRecorder()
-	r.ServeHTTP(rec, httptest.NewRequest("GET", "/a/b/foo", nil))
+	r.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/a/b/foo", http.NoBody))
 	equalSlice(t, trace, []string{"root", "a", "b", "handler"}, "nested trace")
 }
 
@@ -162,7 +162,7 @@ func mustPanic(t *testing.T, fn func()) {
 	fn()
 }
 
-func TestRouter_UseAfterRoutePanics(t *testing.T) {
+func Test_Router_UseAfterRoutePanics(t *testing.T) {
 	t.Run("root", func(t *testing.T) {
 		r := NewRouter()
 		r.Get("/foo", func(w http.ResponseWriter, _ *http.Request) {})
@@ -178,13 +178,13 @@ func TestRouter_UseAfterRoutePanics(t *testing.T) {
 	})
 }
 
-func TestRouter_NoMiddleware(t *testing.T) {
+func Test_Router_NoMiddleware(t *testing.T) {
 	r := NewRouter()
 	r.Get("/foo", func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = w.Write([]byte("ok"))
 	})
 	rec := httptest.NewRecorder()
-	r.ServeHTTP(rec, httptest.NewRequest("GET", "/foo", nil))
+	r.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/foo", http.NoBody))
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status: got %d want 200", rec.Code)
 	}

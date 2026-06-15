@@ -1,3 +1,5 @@
+// Package server provides the HTTP server, router, middleware, and auth
+// primitives.
 package server
 
 import (
@@ -13,6 +15,7 @@ var ErrUnauthorized = errors.New("unauthorized")
 // Action names the operation being checked by an Authorizer.
 type Action string
 
+// The set of actions an Authorizer can be asked to check.
 const (
 	ActionRead   Action = "read"
 	ActionWrite  Action = "write"
@@ -37,28 +40,34 @@ const (
 	ctxScopes
 )
 
-func WithOrgID(ctx context.Context, orgID string) context.Context {
+// ContextWithOrgID returns a copy of ctx carrying the org ID.
+func ContextWithOrgID(ctx context.Context, orgID string) context.Context {
 	return context.WithValue(ctx, ctxOrgID, orgID)
 }
 
-func WithUserID(ctx context.Context, userID string) context.Context {
+// ContextWithUserID returns a copy of ctx carrying the user ID.
+func ContextWithUserID(ctx context.Context, userID string) context.Context {
 	return context.WithValue(ctx, ctxUserID, userID)
 }
 
-func WithScopes(ctx context.Context, scopes []string) context.Context {
+// ContextWithScopes returns a copy of ctx carrying the caller's scopes.
+func ContextWithScopes(ctx context.Context, scopes []string) context.Context {
 	return context.WithValue(ctx, ctxScopes, scopes)
 }
 
+// OrgIDFromContext reads the org ID set by ContextWithOrgID. ok is false if unset.
 func OrgIDFromContext(ctx context.Context) (string, bool) {
 	v, ok := ctx.Value(ctxOrgID).(string)
 	return v, ok
 }
 
+// UserIDFromContext reads the user ID set by ContextWithUserID. ok is false if unset.
 func UserIDFromContext(ctx context.Context) (string, bool) {
 	v, ok := ctx.Value(ctxUserID).(string)
 	return v, ok
 }
 
+// ScopesFromContext reads the scopes set by ContextWithScopes. Returns nil if unset.
 func ScopesFromContext(ctx context.Context) []string {
 	v, _ := ctx.Value(ctxScopes).([]string)
 	return v

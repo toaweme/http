@@ -29,9 +29,9 @@ func AuthMiddleware(extract ClaimsExtractor, logger Logger) func(http.Handler) h
 				return
 			}
 
-			ctx := WithOrgID(r.Context(), claims.OrgID)
-			ctx = WithUserID(ctx, claims.UserID)
-			ctx = WithScopes(ctx, claims.Scopes)
+			ctx := ContextWithOrgID(r.Context(), claims.OrgID)
+			ctx = ContextWithUserID(ctx, claims.UserID)
+			ctx = ContextWithScopes(ctx, claims.Scopes)
 
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})

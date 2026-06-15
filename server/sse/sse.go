@@ -12,6 +12,7 @@ package sse
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -30,7 +31,7 @@ type Event struct {
 }
 
 // JSONEvent is a convenience constructor - marshals the payload into Data.
-// Returns an error if marshalling fails; otherwise the event is ready to
+// Returns an error if marshaling fails; otherwise the event is ready to
 // publish or write.
 func JSONEvent(eventType string, payload any) (Event, error) {
 	raw, err := json.Marshal(payload)
@@ -54,7 +55,7 @@ type Writer struct {
 func NewWriter(w http.ResponseWriter) (*Writer, error) {
 	f, ok := w.(http.Flusher)
 	if !ok {
-		return nil, fmt.Errorf("response writer does not support flushing - SSE requires http.Flusher")
+		return nil, errors.New("response writer does not support flushing - SSE requires http.Flusher")
 	}
 	return &Writer{w: w, flusher: f}, nil
 }
@@ -238,7 +239,7 @@ func (h *Hub) Subscribers(topic string) int {
 }
 
 // ServeStream is a convenience handler that subscribes the client to a topic
-// and streams every event over SSE until the request context is cancelled.
+// and streams every event over SSE until the request context is canceled.
 // Sends a heartbeat ping every 15s so proxies don't idle out the connection.
 func ServeStream(w http.ResponseWriter, r *http.Request, hub *Hub, topic string) error {
 	sw, err := NewWriter(w)

@@ -19,19 +19,25 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
+// Router is the chi-backed request router exposed by this package.
 type Router struct {
 	chi chi.Router
 }
 
+// NewRouter builds an empty Router.
 func NewRouter() *Router {
 	return &Router{chi: chi.NewRouter()}
 }
 
+// LogRoutes walks every registered route and logs its method and pattern.
 func (r *Router) LogRoutes(logger Logger) {
-	chi.Walk(r.chi, func(method string, route string, handler http.Handler, middlewares ...func(http.Handler) http.Handler) error {
+	err := chi.Walk(r.chi, func(method string, route string, handler http.Handler, middlewares ...func(http.Handler) http.Handler) error {
 		logger.Info("chi", "route", route, "method", method, "middlewares", len(middlewares))
 		return nil
 	})
+	if err != nil {
+		logger.Error("failed to walk routes", "error", err)
+	}
 }
 
 // Use appends middleware to this router's scope. chi panics if called after
@@ -60,11 +66,20 @@ func (r *Router) Handle(method, pattern string, h http.Handler) {
 	r.chi.Method(method, pattern, h)
 }
 
-func (r *Router) Get(p string, h http.HandlerFunc)    { r.Handle("GET", p, h) }
-func (r *Router) Post(p string, h http.HandlerFunc)   { r.Handle("POST", p, h) }
-func (r *Router) Put(p string, h http.HandlerFunc)    { r.Handle("PUT", p, h) }
+// Get registers h for GET requests to pattern p.
+func (r *Router) Get(p string, h http.HandlerFunc) { r.Handle("GET", p, h) }
+
+// Post registers h for POST requests to pattern p.
+func (r *Router) Post(p string, h http.HandlerFunc) { r.Handle("POST", p, h) }
+
+// Put registers h for PUT requests to pattern p.
+func (r *Router) Put(p string, h http.HandlerFunc) { r.Handle("PUT", p, h) }
+
+// Delete registers h for DELETE requests to pattern p.
 func (r *Router) Delete(p string, h http.HandlerFunc) { r.Handle("DELETE", p, h) }
-func (r *Router) Patch(p string, h http.HandlerFunc)  { r.Handle("PATCH", p, h) }
+
+// Patch registers h for PATCH requests to pattern p.
+func (r *Router) Patch(p string, h http.HandlerFunc) { r.Handle("PATCH", p, h) }
 
 func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	r.chi.ServeHTTP(w, req)

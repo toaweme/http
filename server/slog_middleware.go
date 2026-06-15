@@ -80,14 +80,14 @@ func flattenHeaders(h http.Header) map[string]string {
 	return out
 }
 
-func readAndReplace(body io.ReadCloser, max int) ([]byte, io.ReadCloser) {
+func readAndReplace(body io.ReadCloser, maxBytes int) ([]byte, io.ReadCloser) {
 	defer body.Close()
 	var (
 		buf []byte
 		err error
 	)
-	if max > 0 {
-		buf, err = io.ReadAll(io.LimitReader(body, int64(max)))
+	if maxBytes > 0 {
+		buf, err = io.ReadAll(io.LimitReader(body, int64(maxBytes)))
 	} else {
 		buf, err = io.ReadAll(body)
 	}
