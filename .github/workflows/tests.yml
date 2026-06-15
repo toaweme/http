@@ -43,6 +43,16 @@ jobs:
           go-version: ${{ matrix.go }}
       - run: go test ./... -count=1 -v
       - run: go build ./...
+
+  benchmarks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
+        with:
+          go-version: stable
+          check-latest: true
+      - run: go test ./... -run '^$' -bench . -benchmem
 #
 #  quality:
 #    runs-on: ubuntu-latest
