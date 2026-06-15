@@ -5,17 +5,20 @@
 [![GitHub Tag](https://img.shields.io/github/v/tag/toaweme/http?label=Tag&color=green)](https://github.com/toaweme/http/releases)
 [![License](https://img.shields.io/badge/License-MIT-blue)](/LICENSE)
 
-## A small HTTP client and server, stdlib-first
+## HTTP client and server
 
-`github.com/toaweme/http` is a thin, dependency-light layer over `net/http`: a struct-driven HTTP **client** (zero third-party deps) and a chi-backed HTTP **server** with the middleware, routing, and SSE pieces you reach for on every service. Requests and responses are plain structs, identity and tracing headers are first-class, and everything logs through one tiny injectable `Logger` interface.
+Zero dependency, lightweight HTTP client with a struct based config.
+
+A tiny wrapper around `chi` so that module consumers wouldn't need to import chi directly.
+It's unlikely to ever need to switch routers, but years ago I thought the same thing about Gin and now migrating to chi.
 
 ## Modules
 
-This repo is three modules so you only pull in what you use:
+Each with their own `go.mod`, but both here for convenience.
 
 - `github.com/toaweme/http` - the HTTP **client**. Pure stdlib, no third-party dependencies. Go 1.19+.
 - `github.com/toaweme/http/server` - the HTTP **server**: router, middleware, auth, JSON helpers. Depends only on `go-chi/chi`.
-- `github.com/toaweme/http/server/sse` - the **Server-Sent Events** writer and broadcast hub used by the server.
+  - `github.com/toaweme/http/server/sse` - the **Server-Sent Events** writer and broadcast hub used by the server.
 
 ## Install
 

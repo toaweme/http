@@ -4,7 +4,7 @@
 [![Go Reference](https://img.shields.io/badge/Docs-pkg.go.dev-blue)](https://pkg.go.dev/github.com/toaweme/http/server)
 [![License](https://img.shields.io/badge/License-MIT-blue)](../LICENSE)
 
-## A small HTTP server, batteries where you want them
+## A small chi wrapper
 
 `github.com/toaweme/http/server` wraps `net/http.Server` behind a chi-backed `Router` and a `{Name, Start, Stop}` lifecycle, and bundles the middleware, params, JSON helpers, and Server-Sent Events you reach for on every service. chi stays an implementation detail - handlers never import it. It is the server half of [`github.com/toaweme/http`](https://github.com/toaweme/http) and depends only on `go-chi/chi`.
 
