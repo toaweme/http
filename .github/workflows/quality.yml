@@ -13,12 +13,11 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
-env:
-  # tracks the version the shipped .golangci.yml is validated against.
-  GOLANGCI_VERSION: v2.12.2
-
 jobs:
-  client:
+  # the one thing care can't do: verify the client builds and tests across the
+  # full supported Go range. care runs every other check (build, deps, docs,
+  # tests, vulnerabilities, benchmarks, lint) once in the care job below.
+  compat-client:
     strategy:
       fail-fast: false
       matrix:
@@ -34,10 +33,9 @@ jobs:
           go-version: ${{ matrix.go }}
 
       - run: go build ./...
-      - run: go vet ./...
       - run: go test ./... -count=1
 
-  server:
+  compat-server:
     strategy:
       fail-fast: false
       matrix:
@@ -56,45 +54,13 @@ jobs:
           go-version: ${{ matrix.go }}
 
       - run: go build ./...
-      - run: go vet ./...
       - run: go test ./... -count=1
 
-  lint:
-    runs-on: ubuntu-latest
-    steps:
-      # v7.0.0 (https://github.com/actions/checkout/releases/tag/v7.0.0)
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
-
-      # v6.5.0 (https://github.com/actions/setup-go/releases/tag/v6.5.0)
-      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16
-        with:
-          go-version-file: go.mod
-
-      - name: golangci-lint
-        # v9.2.1 (https://github.com/golangci/golangci-lint-action/releases/tag/v9.2.1)
-        uses: golangci/golangci-lint-action@82606bf257cbaff209d206a39f5134f0cfbfd2ee
-        with:
-          version: ${{ env.GOLANGCI_VERSION }}
-
-  benchmarks:
-    runs-on: ubuntu-latest
-    steps:
-      # v7.0.0 (https://github.com/actions/checkout/releases/tag/v7.0.0)
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
-
-      # v6.5.0 (https://github.com/actions/setup-go/releases/tag/v6.5.0)
-      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16
-        with:
-          go-version: stable
-          check-latest: true
-
-      - run: go test ./... -run '^$' -bench . -benchmem
-
-  # run care through the published action to produce and publish a report, and
-  # fail the build on a failing check (strict). Push-only so fork PRs don't hit
-  # OIDC restrictions when publishing.
-  report:
-    needs: [ client, server ]
+  # care runs every quality check (build, deps, docs, tests, vulnerabilities,
+  # benchmarks, lint) and grades them; strict fails the build on a failing check.
+  # Push-only so fork PRs don't hit OIDC restrictions when publishing the report.
+  care:
+    needs: [ compat-client, compat-server ]
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
     permissions:
