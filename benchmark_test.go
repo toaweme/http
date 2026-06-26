@@ -94,8 +94,11 @@ func Benchmark_Client_PostStream_SSE(b *testing.B) {
 		if err := client.PostStream(ctx, stream, req); err != nil {
 			b.Fatalf("PostStream returned error: %v", err)
 		}
+		var got int
 		for range stream {
+			got++
 		}
+		_ = got
 	}
 }
 

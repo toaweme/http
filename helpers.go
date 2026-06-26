@@ -5,6 +5,7 @@ import (
 	"fmt"
 )
 
+// JSON marshals data to a JSON string.
 func JSON(data any) (string, error) {
 	jsonData, err := json.Marshal(data)
 	if err != nil {
@@ -13,6 +14,7 @@ func JSON(data any) (string, error) {
 	return string(jsonData), nil
 }
 
+// FromJSON unmarshals JSON data into a value of type T.
 func FromJSON[T any](data []byte) (T, error) {
 	var result T
 	err := json.Unmarshal(data, &result)

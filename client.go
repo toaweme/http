@@ -10,6 +10,8 @@ import (
 	"net/url"
 )
 
+// Client performs HTTP requests against a configured base URL, buffering responses
+// by default and streaming them (body or Server-Sent Events) when asked.
 type Client interface {
 	Get(ctx context.Context, req GetRequest) (*Response, error)
 	GetStream(ctx context.Context, stream chan StreamResponse, req Request) error
@@ -20,15 +22,47 @@ type Client interface {
 	Delete(ctx context.Context, req Request) (*Response, error)
 }
 
+// Response is the outcome of a request: a buffered Body or, for a streamed request,
+// a live Reader, alongside the status code and headers.
 type Response struct {
 	StatusCode int
-	Body       []byte
-	Headers    http.Header
-	Error      error
+	// Body holds the fully-read response for a buffered request (Request.Stream
+	// false, the default). It is nil for a streamed request, where Reader carries
+	// the live body instead.
+	Body []byte
+	// Reader is the live, unread response body of a streamed request (Request.Stream
+	// true). The caller owns it and must Close it (Response itself is an io.ReadCloser
+	// over it, so io.Copy(dst, resp) then resp.Close() works). It is nil for a
+	// buffered request.
+	Reader  io.ReadCloser
+	Headers http.Header
+	Error   error
 }
 
+var _ io.ReadCloser = (*Response)(nil)
+
+// Read streams a streamed response's body, letting a Response be passed straight to
+// io.Copy. It reads nothing for a buffered response (use Body for those).
+func (r *Response) Read(p []byte) (int, error) {
+	if r.Reader == nil {
+		return 0, io.EOF
+	}
+	return r.Reader.Read(p)
+}
+
+// Close releases a streamed response's body. It is a no-op for a buffered response,
+// so callers can defer it unconditionally.
+func (r *Response) Close() error {
+	if r.Reader == nil {
+		return nil
+	}
+	return r.Reader.Close()
+}
+
+// StreamResponseType classifies a decoded Server-Sent Events frame.
 type StreamResponseType string
 
+// Server-Sent Events frame types decoded from a stream.
 const (
 	StreamResponseTypeEOF     StreamResponseType = "EOF"
 	StreamResponseTypeData    StreamResponseType = "DATA"
@@ -38,6 +72,7 @@ const (
 	StreamResponseTypeComment StreamResponseType = "COMMENT"
 )
 
+// StreamResponse is one decoded Server-Sent Events frame from a streaming request.
 type StreamResponse struct {
 	StatusCode int
 	Body       []byte
@@ -46,30 +81,41 @@ type StreamResponse struct {
 	Type       StreamResponseType
 }
 
+// Request is the shared shape of every request: path, query, headers, identifiers,
+// and per-request flags.
 type Request struct {
 	ID        string
 	SessionID string
 	Path      string
 	Query     url.Values
 	Headers   map[string]string
+	// Stream, when true, skips buffering the response body into Response.Body and
+	// hands the live stream back as Response.Reader instead, so large downloads never
+	// round-trip through memory. The caller must Close the Response. Default false
+	// keeps the buffered Body behavior every other caller relies on.
+	Stream bool
 }
 
+// GetRequest is a GET request.
 type GetRequest struct {
 	Request
 }
 
+// PostRequest is a POST request carrying a body.
 type PostRequest struct {
 	Request
 
 	Body []byte
 }
 
+// PatchRequest is a PATCH request carrying a body.
 type PatchRequest PostRequest
+
+// PutRequest is a PUT request carrying a body.
 type PutRequest PostRequest
 
 type httpClient struct {
 	baseURL string
-	agent   string
 
 	client  *http.Client
 	headers map[string]string
@@ -78,6 +124,8 @@ type httpClient struct {
 
 var _ Client = httpClient{}
 
+// Config is the static, construction-time configuration of a Client: its base URL
+// and the identifying headers stamped onto every request.
 type Config struct {
 	BaseURL     string            `json:"base_url"`
 	UserAgent   string            `json:"user_agent"`
@@ -112,6 +160,8 @@ func WithHTTPClient(client *http.Client) Option {
 	}
 }
 
+// NewClient builds a Client from config and options, defaulting to
+// http.DefaultClient and a silent logger when none are supplied.
 func NewClient(config Config, opts ...Option) Client {
 	if config.Headers == nil {
 		config.Headers = make(map[string]string)
@@ -201,7 +251,7 @@ func (h httpClient) do(ctx context.Context, method string, req Request, body []b
 	if body != nil {
 		httpReq, err = http.NewRequestWithContext(ctx, method, path, bytes.NewBuffer(body))
 	} else {
-		httpReq, err = http.NewRequestWithContext(ctx, method, path, nil)
+		httpReq, err = http.NewRequestWithContext(ctx, method, path, http.NoBody)
 	}
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
@@ -217,6 +267,18 @@ func (h httpClient) do(ctx context.Context, method string, req Request, body []b
 	if err != nil {
 		return nil, fmt.Errorf("failed to send request: %w", err)
 	}
+
+	// a streamed request hands the live body back to the caller unread, so large
+	// downloads never round-trip through memory. The caller owns Close.
+	if req.Stream {
+		h.logger.Trace("http-client", "type", "response", "method", method, "url", path, "status", resp.StatusCode, "body", "<streamed>")
+		return &Response{
+			StatusCode: resp.StatusCode,
+			Reader:     resp.Body,
+			Headers:    resp.Header,
+		}, nil
+	}
+
 	defer resp.Body.Close()
 
 	// read response body
@@ -260,6 +322,7 @@ func (h httpClient) doStream(ctx context.Context, method string, stream chan Str
 	httpReq.Header.Set("Cache-Control", "no-cache")
 	httpReq.Header.Set("Connection", "keep-alive")
 
+	//nolint:bodyclose // body is closed by the deferred close in the non-OK branch below and in the consumer goroutine on success
 	resp, err := h.client.Do(httpReq)
 	if err != nil {
 		return fmt.Errorf("failed to send request: %w", err)

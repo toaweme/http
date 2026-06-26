@@ -56,6 +56,63 @@ func Test_Client_Get(t *testing.T) {
 	}
 }
 
+func Test_Client_Get_Stream(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("streamed-payload"))
+	}))
+	defer srv.Close()
+
+	client := newTestClient(t, srv.URL)
+	resp, err := client.Get(context.Background(), GetRequest{Request: Request{Path: "/asset", Stream: true}})
+	if err != nil {
+		t.Fatalf("Get(Stream) returned error: %v", err)
+	}
+	defer resp.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("status = %d, want 200", resp.StatusCode)
+	}
+	// a streamed response buffers nothing; the body arrives via the reader.
+	if resp.Body != nil {
+		t.Errorf("Body = %q, want nil for a streamed response", resp.Body)
+	}
+	if resp.Reader == nil {
+		t.Fatal("Reader is nil for a streamed response")
+	}
+	// Response is an io.Reader, so io.Copy reads straight from it.
+	var buf strings.Builder
+	if _, err := io.Copy(&buf, resp); err != nil {
+		t.Fatalf("io.Copy from response: %v", err)
+	}
+	if buf.String() != "streamed-payload" {
+		t.Errorf("streamed body = %q, want streamed-payload", buf.String())
+	}
+}
+
+func Test_Client_Get_BufferedClose(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte("buffered"))
+	}))
+	defer srv.Close()
+
+	client := newTestClient(t, srv.URL)
+	resp, err := client.Get(context.Background(), GetRequest{Request: Request{Path: "/x"}})
+	if err != nil {
+		t.Fatalf("Get returned error: %v", err)
+	}
+	if string(resp.Body) != "buffered" {
+		t.Errorf("Body = %q, want buffered", resp.Body)
+	}
+	if resp.Reader != nil {
+		t.Errorf("Reader = %v, want nil for a buffered response", resp.Reader)
+	}
+	// Close is a no-op on a buffered response, so it is always safe to defer.
+	if err := resp.Close(); err != nil {
+		t.Errorf("Close on buffered response = %v, want nil", err)
+	}
+}
+
 func Test_Client_BodyMethods(t *testing.T) {
 	tests := []struct {
 		name       string
