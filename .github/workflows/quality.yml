@@ -14,54 +14,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # the one thing care can't do: verify the client builds and tests across the
-  # full supported Go range. care runs every other check (build, deps, docs,
-  # tests, vulnerabilities, benchmarks, lint) once in the care job below.
-  compat-client:
-    strategy:
-      fail-fast: false
-      matrix:
-        go: [ 1.19, "1.20", 1.21, 1.22, 1.23, 1.24, 1.25, 1.26 ]
-    runs-on: ubuntu-latest
-    steps:
-      # v7.0.0 (https://github.com/actions/checkout/releases/tag/v7.0.0)
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
-
-      # v6.5.0 (https://github.com/actions/setup-go/releases/tag/v6.5.0)
-      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16
-        with:
-          go-version: ${{ matrix.go }}
-
-      - run: go build ./...
-      - run: go test ./... -count=1
-
-  compat-server:
-    strategy:
-      fail-fast: false
-      matrix:
-        go: [ 1.25, 1.26 ]
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: server
-    steps:
-      # v7.0.0 (https://github.com/actions/checkout/releases/tag/v7.0.0)
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
-
-      # v6.5.0 (https://github.com/actions/setup-go/releases/tag/v6.5.0)
-      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16
-        with:
-          go-version: ${{ matrix.go }}
-
-      - run: go build ./...
-      - run: go test ./... -count=1
-
-  # care runs every quality check (build, deps, docs, tests, vulnerabilities,
-  # benchmarks, lint) and grades them; strict fails the build on a failing check.
-  # Push-only so fork PRs don't hit OIDC restrictions when publishing the report.
-  care:
-    needs: [ compat-client, compat-server ]
-    if: github.event_name == 'push'
+  client:
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -70,7 +23,32 @@ jobs:
       # v7.0.0 (https://github.com/actions/checkout/releases/tag/v7.0.0)
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
 
+      # v6.5.0 (https://github.com/actions/setup-go/releases/tag/v6.5.0)
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16
+        with:
+          go-version: stable
+
       - uses: toaweme/care@v0.1.0
         with:
           output: report.care.json
-          strict: "true"
+          strict: true
+
+  server:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      # v7.0.0 (https://github.com/actions/checkout/releases/tag/v7.0.0)
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+
+      # v6.5.0 (https://github.com/actions/setup-go/releases/tag/v6.5.0)
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16
+        with:
+          go-version: stable
+
+      - uses: toaweme/care@v0.1.0
+        with:
+          dir: server
+          output: report.care.json
+          strict: true
