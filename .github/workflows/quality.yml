@@ -1,0 +1,110 @@
+name: Quality
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # tracks the version the shipped .golangci.yml is validated against.
+  GOLANGCI_VERSION: v2.12.2
+
+jobs:
+  client:
+    strategy:
+      fail-fast: false
+      matrix:
+        go: [ 1.19, "1.20", 1.21, 1.22, 1.23, 1.24, 1.25, 1.26 ]
+    runs-on: ubuntu-latest
+    steps:
+      # v7.0.0 (https://github.com/actions/checkout/releases/tag/v7.0.0)
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+
+      # v6.5.0 (https://github.com/actions/setup-go/releases/tag/v6.5.0)
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16
+        with:
+          go-version: ${{ matrix.go }}
+
+      - run: go build ./...
+      - run: go vet ./...
+      - run: go test ./... -count=1
+
+  server:
+    strategy:
+      fail-fast: false
+      matrix:
+        go: [ 1.25, 1.26 ]
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: server
+    steps:
+      # v7.0.0 (https://github.com/actions/checkout/releases/tag/v7.0.0)
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+
+      # v6.5.0 (https://github.com/actions/setup-go/releases/tag/v6.5.0)
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16
+        with:
+          go-version: ${{ matrix.go }}
+
+      - run: go build ./...
+      - run: go vet ./...
+      - run: go test ./... -count=1
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      # v7.0.0 (https://github.com/actions/checkout/releases/tag/v7.0.0)
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+
+      # v6.5.0 (https://github.com/actions/setup-go/releases/tag/v6.5.0)
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16
+        with:
+          go-version-file: go.mod
+
+      - name: golangci-lint
+        # v9.2.1 (https://github.com/golangci/golangci-lint-action/releases/tag/v9.2.1)
+        uses: golangci/golangci-lint-action@82606bf257cbaff209d206a39f5134f0cfbfd2ee
+        with:
+          version: ${{ env.GOLANGCI_VERSION }}
+
+  benchmarks:
+    runs-on: ubuntu-latest
+    steps:
+      # v7.0.0 (https://github.com/actions/checkout/releases/tag/v7.0.0)
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+
+      # v6.5.0 (https://github.com/actions/setup-go/releases/tag/v6.5.0)
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16
+        with:
+          go-version: stable
+          check-latest: true
+
+      - run: go test ./... -run '^$' -bench . -benchmem
+
+  # run care through the published action to produce and publish a report, and
+  # fail the build on a failing check (strict). Push-only so fork PRs don't hit
+  # OIDC restrictions when publishing.
+  report:
+    needs: [ client, server ]
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      # v7.0.0 (https://github.com/actions/checkout/releases/tag/v7.0.0)
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+
+      - uses: toaweme/care@v0.1.0
+        with:
+          output: report.care.json
+          strict: "true"

@@ -1,6 +1,13 @@
 # http
 
-[![Quality](https://github.com/toaweme/http/actions/workflows/tests.yml/badge.svg)](https://github.com/toaweme/http/actions/workflows/tests.yml)
+[![Quality](https://github.com/toaweme/http/actions/workflows/quality.yml/badge.svg)](https://github.com/toaweme/http/actions/workflows/quality.yml)
+<a href="https://code.toawe.me/toaweme/http/health">
+    <picture>
+        <source media="(prefers-color-scheme: dark)" srcset="https://code.toawe.me/toaweme/http/badge-dark.svg">
+        <source media="(prefers-color-scheme: light)" srcset="https://code.toawe.me/toaweme/http/badge.svg">
+        <img alt="http health" src="https://code.toawe.me/toaweme/http/badge.svg">
+    </picture>
+</a>
 [![Go Reference](https://img.shields.io/badge/Docs-pkg.go.dev-blue)](https://pkg.go.dev/github.com/toaweme/http)
 [![GitHub Tag](https://img.shields.io/github/v/tag/toaweme/http?label=Tag&color=green)](https://github.com/toaweme/http/releases)
 [![License](https://img.shields.io/badge/License-MIT-blue)](/LICENSE)
@@ -183,3 +190,16 @@ The test files double as usage references: [`client_test.go`](./client_test.go) 
 ```sh
 go test ./...
 ```
+
+## Hosted code and health reports
+
+Reports for this repo are hosted by our <a href="https://code.toawe.me">code viewer</a>, which also serves the badges and cards above.
+
+<p align="center">
+  <a href="https://code.toawe.me/toaweme/http/health"><picture><source media="(prefers-color-scheme: dark)" srcset="https://code.toawe.me/toaweme/http/card.svg"><source media="(prefers-color-scheme: light)" srcset="https://code.toawe.me/toaweme/http/card-light.svg"><img alt="http health" src="https://code.toawe.me/toaweme/http/card-light.svg" width="48%"></picture></a>
+  <a href="https://code.toawe.me/toaweme/http/code"><picture><source media="(prefers-color-scheme: dark)" srcset="https://code.toawe.me/toaweme/http/code-card.svg"><source media="(prefers-color-scheme: light)" srcset="https://code.toawe.me/toaweme/http/code-card-light.svg"><img alt="http code" src="https://code.toawe.me/toaweme/http/code-card-light.svg" width="48%"></picture></a>
+</p>
+
+---
+
+Made with ❤️ in Lithuania 🇱🇹.
