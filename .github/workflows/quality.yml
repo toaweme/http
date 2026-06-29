@@ -3,6 +3,7 @@ name: Quality
 on:
   push:
     branches: [main]
+    tags: ["v*"]
   pull_request:
   workflow_dispatch:
 
@@ -14,11 +15,12 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # the client module at the repo root.
   client:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      id-token: write
+      id-token: write   # publish the report to the care dashboard
     steps:
       # v7.0.0 (https://github.com/actions/checkout/releases/tag/v7.0.0)
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
@@ -28,11 +30,13 @@ jobs:
         with:
           go-version: stable
 
-      - uses: toaweme/care@v0.1.0
+      - uses: toaweme/care@v0.4.0
         with:
-          output: report.care.json
           strict: true
+          output: report.care.json
+          publish-url: https://code.toawe.me/ingest?kind=care
 
+  # the server module, which has its own go.mod under server/.
   server:
     runs-on: ubuntu-latest
     permissions:
@@ -47,8 +51,9 @@ jobs:
         with:
           go-version: stable
 
-      - uses: toaweme/care@v0.1.0
+      - uses: toaweme/care@v0.4.0
         with:
           dir: server
-          output: report.care.json
           strict: true
+          output: report.care.json
+          publish-url: https://code.toawe.me/ingest?kind=care
