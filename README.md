@@ -196,8 +196,8 @@ go test ./...
 Reports for this repo are hosted by our <a href="https://code.toawe.me">code viewer</a>, which also serves the badges and cards above.
 
 <p align="center">
-  <a href="https://code.toawe.me/toaweme/http/health"><picture><source media="(prefers-color-scheme: dark)" srcset="https://code.toawe.me/toaweme/http/card.svg"><source media="(prefers-color-scheme: light)" srcset="https://code.toawe.me/toaweme/http/card-light.svg"><img alt="http health" src="https://code.toawe.me/toaweme/http/card-light.svg" width="48%"></picture></a>
-  <a href="https://code.toawe.me/toaweme/http/code"><picture><source media="(prefers-color-scheme: dark)" srcset="https://code.toawe.me/toaweme/http/code-card.svg"><source media="(prefers-color-scheme: light)" srcset="https://code.toawe.me/toaweme/http/code-card-light.svg"><img alt="http code" src="https://code.toawe.me/toaweme/http/code-card-light.svg" width="48%"></picture></a>
+  <a href="https://code.toawe.me/toaweme/http/health"><picture><source media="(prefers-color-scheme: dark)" srcset="https://code.toawe.me/toaweme/http/card-dark.svg"><source media="(prefers-color-scheme: light)" srcset="https://code.toawe.me/toaweme/http/card.svg"><img alt="http health" src="https://code.toawe.me/toaweme/http/card.svg" width="48%"></picture></a>
+  <a href="https://code.toawe.me/toaweme/http/code"><picture><source media="(prefers-color-scheme: dark)" srcset="https://code.toawe.me/toaweme/http/code-card-dark.svg"><source media="(prefers-color-scheme: light)" srcset="https://code.toawe.me/toaweme/http/code-card.svg"><img alt="http code" src="https://code.toawe.me/toaweme/http/code-card.svg" width="48%"></picture></a>
 </p>
 
 ---
