@@ -22,7 +22,7 @@ jobs:
       # v6.5.0 (https://github.com/actions/setup-go/releases/tag/v6.5.0)
       - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16
         with:
-          go-version-file: go.mod
+          go-version: stable
 
       # v0.8.0 (https://github.com/toaweme/care/releases/tag/v0.8.0)
       - uses: toaweme/care@3284955e1fb40602f84d1f7f192e67bc2ef78221
