@@ -5,6 +5,18 @@ All notable changes to this project are documented here, newest first.
 Entries are generated from [Conventional Commits](https://www.conventionalcommits.org)
 and grouped by change type. This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.1] - 2026-07-01
+
+### CI & Build
+
+- Bump care to v0.8.0 by [@iberflow](https://github.com/iberflow) in [7812ab1](https://github.com/toaweme/http/commit/7812ab17ab037da52908599cc31ddd5923dc21c8).
+- Bump care to v0.7.1 and pin to commit sha by [@iberflow](https://github.com/iberflow) in [e76b7da](https://github.com/toaweme/http/commit/e76b7da6004575cb01c6408bf957afa384174f19).
+- Bump care to v0.6.0 and fix card-svg dark/light wiring by [@iberflow](https://github.com/iberflow) in [10a3455](https://github.com/toaweme/http/commit/10a3455f8795021a16c40d7b9a238c1b0608ef18).
+
+### Chores & Other
+
+- Add CHANGELOG and bump care quality gate to v0.4.0 by [@iberflow](https://github.com/iberflow) in [3d0577f](https://github.com/toaweme/http/commit/3d0577f76da8385f262bdb41246f49f7eef6b416).
+
 ## [0.2.0] - 2026-06-27
 
 ### Features
@@ -155,6 +167,7 @@ and grouped by change type. This project adheres to [Semantic Versioning](https:
 - Cleanup by [@iberflow](https://github.com/iberflow) in [aea82ee](https://github.com/toaweme/http/commit/aea82eee793ebba2e51b2fb006f90593261683a7).
 - Cleanup by [@iberflow](https://github.com/iberflow) in [13f2bd4](https://github.com/toaweme/http/commit/13f2bd4f34b15c79ec25e6ea8275908dc91eef9a).
 
+[0.2.1]: https://github.com/toaweme/http/compare/server/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/toaweme/http/compare/server/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/toaweme/http/compare/server/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/toaweme/http/releases/tag/v0.1.0
