@@ -1,0 +1,68 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write   # create the GitHub release
+
+jobs:
+  # gate the release on care: a tag only ships a release if care's checks pass
+  # on the tagged commit.
+  test:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      # v7.0.0 (https://github.com/actions/checkout/releases/tag/v7.0.0)
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+
+      # v6.5.0 (https://github.com/actions/setup-go/releases/tag/v6.5.0)
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16
+        with:
+          go-version-file: go.mod
+
+      # v0.8.0 (https://github.com/toaweme/care/releases/tag/v0.8.0)
+      - uses: toaweme/care@3284955e1fb40602f84d1f7f192e67bc2ef78221
+        with:
+          strict: true
+
+  release:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      # v7.0.0 (https://github.com/actions/checkout/releases/tag/v7.0.0)
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+        with:
+          fetch-depth: 0   # care needs full history to derive changelog notes
+
+      # v0.8.0 (https://github.com/toaweme/care/releases/tag/v0.8.0)
+      - uses: toaweme/care@3284955e1fb40602f84d1f7f192e67bc2ef78221
+        with:
+          install-only: true
+
+      # care generates the conventional-commit notes (the org's single source
+      # for a release body). Written to the runner temp dir, not the work tree,
+      # so the checkout stays clean. tee echoes the notes into the job log, and
+      # the non-empty guard substitutes a fallback rather than shipping an empty
+      # release body.
+      - name: Generate release notes
+        run: |
+          notes="$RUNNER_TEMP/notes.md"
+          care changelog --plain | tee "$notes" || true
+          if [ ! -s "$notes" ]; then
+            echo "::warning::care changelog produced empty notes; using fallback"
+            echo "See the commit history for changes in this release." > "$notes"
+          fi
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create GitHub release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "${{ github.ref_name }}" \
+            --title "${{ github.ref_name }}" \
+            --notes-file "$RUNNER_TEMP/notes.md"
