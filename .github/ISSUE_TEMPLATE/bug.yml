@@ -1,0 +1,48 @@
+name: Bug report
+description: Something in the http library behaves incorrectly.
+labels: ["bug", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. A bug report is an issue too, so a maintainer will
+        confirm it before any fix PR is opened. Please do not open a PR yet.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What did you expect, and what happened instead?
+    validations:
+      required: true
+  - type: textarea
+    id: reproducer
+    attributes:
+      label: Minimal reproducer
+      description: The smallest Go snippet or test that reproduces the behavior.
+      render: go
+    validations:
+      required: true
+  - type: textarea
+    id: output
+    attributes:
+      label: Output / logs
+      description: Relevant output, panic, or error. Paste it as text, not a screenshot.
+      render: shell
+    validations:
+      required: false
+  - type: input
+    id: version
+    attributes:
+      label: Module version
+      description: The released version or commit you are on.
+      placeholder: v0.1.0 or a commit SHA
+    validations:
+      required: true
+  - type: input
+    id: goversion
+    attributes:
+      label: Go version and OS
+      description: Output of `go version`, plus your OS and architecture.
+      placeholder: go1.24.0 darwin/arm64
+    validations:
+      required: true
