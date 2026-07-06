@@ -191,6 +191,14 @@ The test files double as usage references: [`client_test.go`](./client_test.go) 
 go test ./...
 ```
 
+## Contributing
+
+`http` uses an issue-first workflow. Open an issue describing the change and wait for a maintainer to approve the approach (the `approved` label) before you open a pull request. PRs that don't reference an approved issue are flagged by a bot and usually closed, so the issue step saves you wasted work.
+
+Every commit must be signed off for the [Developer Certificate of Origin](https://developercertificate.org/) with `git commit -s`. A CI check enforces this on every commit in a pull request.
+
+Full flow in [CONTRIBUTING.md](CONTRIBUTING.md), ground rules in [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md).
+
 ## Hosted code and health reports
 
 Reports for this repo are hosted by our <a href="https://code.toawe.me">code viewer</a>, which also serves the badges and cards above.
