@@ -36,4 +36,3 @@ jobs:
           # Dependabot labels (dependabot.yml) - Dependabot never self-creates these
           label dependencies         0366D6 "Dependency updates"
           label github-actions       000000 "GitHub Actions dependencies"
-          label gomod                00ADD8 "Go module dependencies"
