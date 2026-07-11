@@ -1,8 +1,11 @@
 package server
 
 import (
+	"bufio"
 	"bytes"
+	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"strings"
 	"time"
@@ -106,6 +109,27 @@ type responseRecorder struct {
 	wroteHeader bool
 	buf         *bytes.Buffer
 	maxBytes    int
+}
+
+// Flush forwards to the underlying writer when it supports flushing, so SSE
+// and other streaming handlers keep working through the middleware. The
+// embedded http.ResponseWriter is an interface, so http.Flusher is not
+// promoted automatically. Without this pass-through a w.(http.Flusher) assertion
+// against *responseRecorder would report the capability as absent.
+func (r *responseRecorder) Flush() {
+	if f, ok := r.ResponseWriter.(http.Flusher); ok {
+		f.Flush()
+	}
+}
+
+// Hijack forwards to the underlying writer when it supports hijacking, so
+// WebSocket and other connection-upgrade handlers keep working through the
+// middleware. It returns a clear error when the wrapped writer cannot hijack.
+func (r *responseRecorder) Hijack() (net.Conn, *bufio.ReadWriter, error) {
+	if h, ok := r.ResponseWriter.(http.Hijacker); ok {
+		return h.Hijack()
+	}
+	return nil, nil, fmt.Errorf("failed to hijack connection: %w", http.ErrNotSupported)
 }
 
 func (r *responseRecorder) WriteHeader(code int) {

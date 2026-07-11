@@ -1,7 +1,10 @@
 package server
 
 import (
+	"bufio"
+	"errors"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -132,6 +135,115 @@ func Test_responseRecorder_DoubleWriteHeaderIgnored(t *testing.T) {
 	}
 	if rec.Code != http.StatusCreated {
 		t.Fatalf("underlying status: got %d want %d", rec.Code, http.StatusCreated)
+	}
+}
+
+// flushSpy is an http.ResponseWriter that records whether Flush was called,
+// standing in for a streaming writer without a real connection.
+type flushSpy struct {
+	http.ResponseWriter
+	flushed bool
+}
+
+func (f *flushSpy) Flush() { f.flushed = true }
+
+// hijackSpy is an http.ResponseWriter that supports hijacking and hands back a
+// sentinel conn so tests can assert the exact value flows through untouched.
+type hijackSpy struct {
+	http.ResponseWriter
+	conn net.Conn
+}
+
+func (h *hijackSpy) Hijack() (net.Conn, *bufio.ReadWriter, error) {
+	return h.conn, nil, nil
+}
+
+// plainWriter supports neither Flush nor Hijack, modeling a bare writer.
+type plainWriter struct{ http.ResponseWriter }
+
+func Test_responseRecorder_Flush(t *testing.T) {
+	tests := []struct {
+		name    string
+		writer  http.ResponseWriter
+		flushed bool
+	}{
+		{
+			name:    "forwards to a flushing writer",
+			writer:  &flushSpy{ResponseWriter: httptest.NewRecorder()},
+			flushed: true,
+		},
+		{
+			name:    "no-op when writer does not flush",
+			writer:  &plainWriter{ResponseWriter: httptest.NewRecorder()},
+			flushed: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			rr := &responseRecorder{ResponseWriter: tt.writer, status: http.StatusOK}
+
+			// *responseRecorder must advertise the capability so downstream
+			// SSE handlers can find it via a type assertion.
+			f, ok := any(rr).(http.Flusher)
+			if !ok {
+				t.Fatal("responseRecorder does not satisfy http.Flusher")
+			}
+			f.Flush()
+
+			if spy, isSpy := tt.writer.(*flushSpy); isSpy && spy.flushed != tt.flushed {
+				t.Fatalf("flushed: got %v want %v", spy.flushed, tt.flushed)
+			}
+		})
+	}
+}
+
+func Test_responseRecorder_Hijack(t *testing.T) {
+	wantConn := &net.TCPConn{}
+
+	tests := []struct {
+		name     string
+		writer   http.ResponseWriter
+		wantConn net.Conn
+		wantErr  bool
+	}{
+		{
+			name:     "returns underlying conn when supported",
+			writer:   &hijackSpy{ResponseWriter: httptest.NewRecorder(), conn: wantConn},
+			wantConn: wantConn,
+			wantErr:  false,
+		},
+		{
+			name:    "clear error when unsupported",
+			writer:  &plainWriter{ResponseWriter: httptest.NewRecorder()},
+			wantErr: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			rr := &responseRecorder{ResponseWriter: tt.writer, status: http.StatusOK}
+
+			h, ok := any(rr).(http.Hijacker)
+			if !ok {
+				t.Fatal("responseRecorder does not satisfy http.Hijacker")
+			}
+			conn, _, err := h.Hijack()
+
+			if tt.wantErr {
+				if err == nil {
+					t.Fatal("expected an error, got nil")
+				}
+				if !errors.Is(err, http.ErrNotSupported) {
+					t.Fatalf("error: got %v want wrapped http.ErrNotSupported", err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if conn != tt.wantConn {
+				t.Fatalf("conn: got %v want %v", conn, tt.wantConn)
+			}
+		})
 	}
 }
 
