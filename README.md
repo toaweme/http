@@ -19,6 +19,8 @@ Zero dependency, lightweight HTTP client with a struct based config.
 A tiny wrapper around `chi` so that module consumers wouldn't need to import chi directly.
 It's unlikely to ever need to switch routers, but years ago I thought the same thing about Gin and now migrating to chi.
 
+**[Documentation](https://toawe.me/docs/http)** | [toawe.me](https://toawe.me)
+
 ## Modules
 
 Each with their own `go.mod`, but both here for convenience.
