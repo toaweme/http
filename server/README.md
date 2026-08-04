@@ -28,6 +28,7 @@ go get github.com/toaweme/http/server
 - `server.NewServer(Config, *Router, Logger, ...Option)` wraps the router in a `*net/http.Server`; `Start` blocks until `Stop(ctx)` shuts it down gracefully.
 - `server.Param`, `server.Wildcard`, `server.RoutePattern` read path data without exposing chi to handlers.
 - `server.SlogMiddleware(SlogConfig, Logger)` logs every request; `server.AuthMiddleware(ClaimsExtractor, Logger)` enforces Bearer auth and injects claims.
+- `server.CrossOrigin(CorsConfig)` applies a CORS policy and answers preflights; `server.LimitBody(max)` caps how much of a request body a handler can read.
 - `server.WriteJSON` / `WriteError` / `WriteBadRequest` / `ReadJSON` / `ReadRawJSON` are the request/response helpers.
 - `sse.NewHub()` (sub-package `server/sse`) broadcasts Server-Sent Events to subscribers.
 
@@ -113,6 +114,38 @@ scopes := server.ScopesFromContext(req.Context())
 
 The `Authorizer` interface and `ContextWith*` helpers are available for building authorization checks on top.
 
+### CORS
+
+`CrossOrigin` sets the `Access-Control-Allow-*` headers on allowed cross-origin requests and answers preflight `OPTIONS` with 204 before the router sees them. An empty `AllowedOrigins` blocks every cross-origin request, so the policy is always something you opt into:
+
+```go
+r.Use(server.CrossOrigin(server.CorsConfig{
+	AllowedOrigins:   []string{"https://app.example.com"}, // or []string{"*"}
+	AllowedMethods:   []string{"GET", "POST", "OPTIONS"},
+	AllowedHeaders:   []string{"Authorization", "Content-Type"},
+	ExposedHeaders:   []string{"X-Request-ID"},
+	AllowCredentials: true,
+	MaxAge:           600, // seconds a browser may cache the preflight
+}))
+```
+
+Requests without an `Origin` header (same-origin and non-browser callers) pass straight through. With `AllowCredentials` the matched origin is echoed back instead of `*`, as the spec requires.
+
+### Body limits
+
+`LimitBody` caps how many bytes a handler may read from a request body. The cap is enforced as the body is read rather than trusted from `Content-Length`, which a chunked request omits entirely and a client can lie about anyway. Reading past the cap yields a `*http.MaxBytesError`, so a handler can answer with 413 instead of dying on an unbounded read:
+
+```go
+r.Use(server.LimitBody(1024 * 1024)) // every route
+
+r.Post("/upload", func(w http.ResponseWriter, req *http.Request) {
+	req = server.LimitRequestBody(w, req, 32*1024*1024) // this route takes more
+	// ...
+})
+```
+
+`LimitRequestBody` is the per-route override. It replaces the router-wide cap rather than nesting inside it, so a route that accepts more bytes than the default actually gets them. A max of zero or less leaves the body alone.
+
 ### Request logging
 
 `SlogMiddleware` logs method, url, duration, and status for every request. Opt in to capturing headers and bodies (with a size cap) for local debugging:
@@ -161,6 +194,8 @@ Subscribers that fall behind have their channel closed rather than blocking the 
 - **Configurable transport** - `WithReadHeaderTimeout`/`WithReadTimeout`/`WithWriteTimeout`/`WithIdleTimeout` options plus a `HTTP()` escape hatch; secure `ReadHeaderTimeout` by default.
 - **Param access** - `Param`, `Wildcard`, `RoutePattern`.
 - **Auth middleware** - Bearer-token extraction into request context via a pluggable `ClaimsExtractor`; `Claims`, `Authorizer`, and `*FromContext` / `ContextWith*` helpers.
+- **CORS** - `CrossOrigin` with an origin allowlist or `*`, credentials-aware origin echo, preflight short-circuit, and `Max-Age` caching.
+- **Body limits** - `LimitBody` as router-wide middleware, `LimitRequestBody` as a per-route override, enforced on read rather than on `Content-Length`.
 - **Request logging** - structured method/url/duration/status, with optional headers and size-capped bodies.
 - **JSON helpers** - `WriteJSON`, `WriteError`, `WriteBadRequest`, `ReadJSON`, `ReadRawJSON`.
 - **SSE hub** - `Writer` for well-formed events, `Hub` for topic fan-out with slow-subscriber drop, and `ServeStream` with heartbeats.
