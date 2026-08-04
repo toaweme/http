@@ -59,7 +59,7 @@ func Test_LimitBody_NilBody(t *testing.T) {
 	served := false
 	handler := http.HandlerFunc(func(http.ResponseWriter, *http.Request) { served = true })
 
-	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
 	req.Body = nil
 	LimitBody(8)(handler).ServeHTTP(httptest.NewRecorder(), req)
 
