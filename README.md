@@ -72,6 +72,22 @@ resp, err := client.Post(ctx, http.PostRequest{
 user, err := http.FromJSON[User](resp.Body) // typed decode helper
 ```
 
+### Unbuffered responses
+
+Every call buffers the body into `Response.Body` by default. Set `Request.Stream` and the client hands back the live body as `Response.Reader` instead, so a large download never round-trips through memory. `*Response` is an `io.ReadCloser`:
+
+```go
+resp, err := client.Get(ctx, http.GetRequest{
+	Request: http.Request{Path: "/files/big.tar", Stream: true},
+})
+if err != nil {
+	return err
+}
+defer resp.Close()
+
+_, err = io.Copy(dst, resp) // resp.Body is nil here; the bytes live on the wire
+```
+
 ### Streaming (Server-Sent Events)
 
 `GetStream` / `PostStream` open an SSE connection and decode the wire format into typed `StreamResponse` values on a channel you own. The call returns once the reader goroutine is running; the channel is closed on EOF.
@@ -146,6 +162,16 @@ r.Use(server.AuthMiddleware(extractClaims, logger))
 org, _ := server.OrgIDFromContext(req.Context())
 ```
 
+Cross-origin policy and request body caps are middleware too, either router-wide or scoped to a group:
+
+```go
+r.Use(server.CrossOrigin(server.CorsConfig{
+	AllowedOrigins: []string{"https://app.example.com"},
+	AllowedMethods: []string{"GET", "POST", "OPTIONS"},
+}))
+r.Use(server.LimitBody(1024 * 1024)) // overridable per route with LimitRequestBody
+```
+
 Broadcast SSE with the hub:
 
 ```go
@@ -163,6 +189,7 @@ hub.Publish("updates", sse.Event{Type: "tick", Data: "hello"})
 
 - **Zero dependencies** - pure stdlib `net/http`, nothing transitive.
 - **Struct requests, one method per verb** - `Get`, `Post`, `Put`, `Patch`, `Delete` returning `*Response` (status, body, headers).
+- **Unbuffered responses** - `Request.Stream` skips buffering and hands back the live body as `Response.Reader`, with `*Response` itself an `io.ReadCloser`.
 - **SSE streaming** - `GetStream` / `PostStream` decode `data:`/`event:`/`id:`/`retry:`/comment lines into typed `StreamResponse` values, with explicit EOF and errors.
 - **Config-driven identity** - base URL, user-agent, platform, app version, client/service IDs, and custom headers, each behind a documented header constant.
 - **Per-request overrides** - path, query, headers, request ID, session ID.
@@ -176,6 +203,8 @@ hub.Publish("updates", sse.Event{Type: "tick", Data: "hello"})
 - **Server lifecycle** - `Name`/`Start`/`Stop` over `net/http.Server` with graceful shutdown and functional options (timeouts) plus a `HTTP()` escape hatch.
 - **Param access** - `Param`, `Wildcard`, `RoutePattern`.
 - **Auth middleware** - Bearer-token extraction into request context (org/user/scopes) via a pluggable `ClaimsExtractor`.
+- **CORS** - `CrossOrigin` with an origin allowlist or `*`, credentials-aware origin echo, preflight short-circuit, and `Max-Age` caching.
+- **Body limits** - `LimitBody` router-wide and `LimitRequestBody` per route, enforced on read rather than trusting `Content-Length`.
 - **Request logging** - structured method/url/duration/status, with optional headers and size-capped bodies.
 - **JSON helpers** - `WriteJSON`, `WriteError`, `WriteBadRequest`, `ReadJSON`, `ReadRawJSON`.
 - **Local logger interface** - defined in the module so the server never depends on the client.
