@@ -2,12 +2,15 @@ package http
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"reflect"
 	"strings"
+	"sync"
 	"testing"
 )
 
@@ -341,19 +344,166 @@ func Test_Client_GetStream_NonOKStatus(t *testing.T) {
 	}
 }
 
-func Test_Client_WithLogger(t *testing.T) {
+func Test_Client_LogsOneRecordPerRequest(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
+		w.WriteHeader(http.StatusTeapot)
+		_, _ = w.Write([]byte("brewed"))
 	}))
 	defer srv.Close()
 
 	rec := &recordingLogger{}
 	client := NewClient(Config{BaseURL: srv.URL}, WithLogger(rec))
-	if _, err := client.Get(context.Background(), GetRequest{Request: Request{Path: "/x"}}); err != nil {
-		t.Fatalf("Get returned error: %v", err)
+	if _, err := client.Post(context.Background(), PostRequest{
+		Request: Request{Path: "/x", Headers: map[string]string{"Authorization": "Bearer secret-token"}},
+		Body:    []byte("request-secret"),
+	}); err != nil {
+		t.Fatalf("Post returned error: %v", err)
 	}
-	if rec.traces == 0 {
-		t.Error("expected logger to receive trace calls, got none")
+
+	records := rec.all()
+	if len(records) != 1 {
+		t.Fatalf("logged %d records, want exactly 1", len(records))
+	}
+
+	tests := []struct {
+		key  string
+		want any
+	}{
+		{key: "method", want: http.MethodPost},
+		{key: "status", want: http.StatusTeapot},
+		{key: "bytes", want: len("brewed")},
+	}
+	for _, tt := range tests {
+		t.Run(tt.key, func(t *testing.T) {
+			got, ok := field(records[0], tt.key)
+			if !ok {
+				t.Fatalf("record has no %q field", tt.key)
+			}
+			if got != tt.want {
+				t.Errorf("%s = %v, want %v", tt.key, got, tt.want)
+			}
+		})
+	}
+	if _, ok := field(records[0], "url"); !ok {
+		t.Error("record has no url field")
+	}
+	if _, ok := field(records[0], "duration"); !ok {
+		t.Error("record has no duration field")
+	}
+}
+
+func Test_Client_NeverLogsBodiesOrHeaders(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("response-secret"))
+	}))
+	defer srv.Close()
+
+	secrets := []string{"Bearer secret-token", "request-secret", "response-secret", "Authorization"}
+
+	rec := &recordingLogger{}
+	client := NewClient(Config{BaseURL: srv.URL}, WithLogger(rec))
+	if _, err := client.Post(context.Background(), PostRequest{
+		Request: Request{Path: "/x", Headers: map[string]string{"Authorization": "Bearer secret-token"}},
+		Body:    []byte("request-secret"),
+	}); err != nil {
+		t.Fatalf("Post returned error: %v", err)
+	}
+
+	for _, record := range rec.all() {
+		rendered := fmt.Sprint(record...)
+		for _, secret := range secrets {
+			if strings.Contains(rendered, secret) {
+				t.Errorf("log record %q leaked %q", rendered, secret)
+			}
+		}
+	}
+}
+
+func Test_Client_Stream_LogsOnceAtEnd(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(http.StatusOK)
+		_, _ = io.WriteString(w, "data: one\n\n")
+		_, _ = io.WriteString(w, "data: two\n\n")
+	}))
+	defer srv.Close()
+
+	rec := &recordingLogger{}
+	client := NewClient(Config{BaseURL: srv.URL}, WithLogger(rec))
+	stream := make(chan StreamResponse)
+	if err := client.GetStream(context.Background(), stream, Request{Path: "/sse"}); err != nil {
+		t.Fatalf("GetStream returned error: %v", err)
+	}
+	for range stream { //nolint:revive // draining the stream is the point
+	}
+
+	records := rec.all()
+	if len(records) != 1 {
+		t.Fatalf("logged %d records, want exactly 1 at stream end", len(records))
+	}
+	if got, _ := field(records[0], "chunks"); got != 2 {
+		t.Errorf("chunks = %v, want 2", got)
+	}
+	if got, _ := field(records[0], "bytes"); got != len("data: one\n\ndata: two\n\n") {
+		t.Errorf("bytes = %v, want %d", got, len("data: one\n\ndata: two\n\n"))
+	}
+}
+
+func Test_Client_Stream_NormalEndCarriesNoError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(http.StatusOK)
+		_, _ = io.WriteString(w, "data: one\n\n")
+	}))
+	defer srv.Close()
+
+	client := newTestClient(t, srv.URL)
+	stream := make(chan StreamResponse)
+	if err := client.GetStream(context.Background(), stream, Request{Path: "/sse"}); err != nil {
+		t.Fatalf("GetStream returned error: %v", err)
+	}
+
+	var last StreamResponse
+	for msg := range stream {
+		last = msg
+	}
+	if last.Type != StreamResponseTypeEOF {
+		t.Fatalf("last type = %q, want EOF", last.Type)
+	}
+	if last.Error != nil {
+		t.Errorf("normal end of stream carried error %v, want nil", last.Error)
+	}
+}
+
+func Test_Client_Stream_NonOKStatusErrorCarriesBody(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = w.Write([]byte(`{"error":"bad model"}`))
+	}))
+	defer srv.Close()
+
+	client := newTestClient(t, srv.URL)
+	stream := make(chan StreamResponse, 1)
+	err := client.GetStream(context.Background(), stream, Request{Path: "/sse"})
+	if err == nil {
+		t.Fatal("expected an error for a non-200 stream, got nil")
+	}
+
+	var statusErr *StatusError
+	if !errors.As(err, &statusErr) {
+		t.Fatalf("error %v is not a *StatusError", err)
+	}
+	if statusErr.StatusCode != http.StatusBadRequest {
+		t.Errorf("status = %d, want 400", statusErr.StatusCode)
+	}
+	if string(statusErr.Body) != `{"error":"bad model"}` {
+		t.Errorf("body = %q, want the error payload", statusErr.Body)
+	}
+	if strings.Contains(err.Error(), "bad model") {
+		t.Errorf("error message %q quotes the response body", err.Error())
+	}
+	for range stream { //nolint:revive // draining the stream is the point
 	}
 }
 
@@ -537,52 +687,33 @@ func Test_UserAgent(t *testing.T) {
 	}
 }
 
-func Test_LimitBodySize(t *testing.T) {
-	tests := []struct {
-		name    string
-		body    string
-		maxSize int64
-		want    string
-	}{
-		{name: "under limit", body: "short", maxSize: 100, want: "short"},
-		{name: "at limit", body: "abc", maxSize: 3, want: "abc"},
-		{name: "over limit truncated", body: "abcdef", maxSize: 3, want: "abc..."},
-		{name: "empty", body: "", maxSize: 10, want: ""},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := limitBodySize([]byte(tt.body), tt.maxSize)
-			if got != tt.want {
-				t.Errorf("limitBodySize = %q, want %q", got, tt.want)
-			}
-		})
-	}
-}
-
-func Test_LogArgs(t *testing.T) {
-	base := []any{"a", 1}
-	out := logArgs(base, "b", 2)
-	want := []any{"a", 1, "b", 2}
-	if !reflect.DeepEqual(out, want) {
-		t.Errorf("logArgs = %v, want %v", out, want)
-	}
-	// must not alias the base backing array.
-	out[0] = "mutated"
-	if base[0] != "a" {
-		t.Error("logArgs must not mutate the base slice")
-	}
-}
-
 type recordingLogger struct {
-	traces int
-	debugs int
-	errs   int
+	mu      sync.Mutex
+	records [][]any
 }
 
 var _ Logger = (*recordingLogger)(nil)
 
-func (l *recordingLogger) Trace(string, ...any) { l.traces++ }
-func (l *recordingLogger) Debug(string, ...any) { l.debugs++ }
-func (l *recordingLogger) Info(string, ...any)  {}
-func (l *recordingLogger) Warn(string, ...any)  {}
-func (l *recordingLogger) Error(string, ...any) { l.errs++ }
+func (l *recordingLogger) Debug(_ string, args ...any) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.records = append(l.records, args)
+}
+
+func (l *recordingLogger) all() [][]any {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	out := make([][]any, len(l.records))
+	copy(out, l.records)
+	return out
+}
+
+// field returns the value logged under key in the record, and whether it was there.
+func field(record []any, key string) (any, bool) {
+	for i := 0; i+1 < len(record); i += 2 {
+		if k, ok := record[i].(string); ok && k == key {
+			return record[i+1], true
+		}
+	}
+	return nil, false
+}
