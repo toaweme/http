@@ -123,21 +123,3 @@ func Benchmark_FromJSON(b *testing.B) {
 		}
 	}
 }
-
-func Benchmark_LimitBodySize(b *testing.B) {
-	body := make([]byte, 4096)
-	b.ReportAllocs()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		_ = limitBodySize(body, size)
-	}
-}
-
-func Benchmark_LogArgs(b *testing.B) {
-	base := []any{"type", "stream-request", "method", "GET", "url", "https://api.example.com/x"}
-	b.ReportAllocs()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		_ = logArgs(base, "status", 200)
-	}
-}

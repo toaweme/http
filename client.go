@@ -4,10 +4,12 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"net/url"
+	"time"
 )
 
 // Client performs HTTP requests against a configured base URL, buffering responses
@@ -219,32 +221,29 @@ func (h httpClient) Delete(ctx context.Context, req Request) (*Response, error) 
 	return h.do(ctx, http.MethodDelete, req, nil)
 }
 
-// logArgs returns a fresh slice of base followed by extra. It copies so the
-// base context can be reused across goroutines without aliasing its backing
-// array.
-func logArgs(base []any, extra ...any) []any {
-	out := make([]any, 0, len(base)+len(extra))
-	out = append(out, base...)
-	out = append(out, extra...)
-	return out
+// StatusError reports a response whose status code makes the request a failure.
+// It carries the response body so a caller can inspect what the peer said
+// without the client ever printing it.
+type StatusError struct {
+	Method     string
+	URL        string
+	StatusCode int
+	Body       []byte
 }
 
-func limitBodySize(body []byte, maxSize int64) string {
-	if int64(len(body)) > maxSize {
-		return string(body[:maxSize]) + "..."
-	}
-	return string(body)
-}
+var _ error = (*StatusError)(nil)
 
-const size = 100
+// Error describes the failed request without quoting the response body,
+// so logging the error never leaks what the peer returned.
+func (e *StatusError) Error() string {
+	return fmt.Sprintf("%s request to %q failed with status %d", e.Method, e.URL, e.StatusCode)
+}
 
 func (h httpClient) do(ctx context.Context, method string, req Request, body []byte) (*Response, error) {
 	path, headers, err := h.buildRequestParams(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build request URI: %w", err)
 	}
-
-	h.logger.Trace("http-client", "type", "request", "method", method, "headers", headers, "url", path, "query", req.Query, "body", string(body))
 
 	var httpReq *http.Request
 	// prepare request
@@ -254,7 +253,7 @@ func (h httpClient) do(ctx context.Context, method string, req Request, body []b
 		httpReq, err = http.NewRequestWithContext(ctx, method, path, http.NoBody)
 	}
 	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
+		return nil, fmt.Errorf("failed to create %s request to %q: %w", method, path, err)
 	}
 
 	// set headers
@@ -263,15 +262,16 @@ func (h httpClient) do(ctx context.Context, method string, req Request, body []b
 	}
 
 	// send request
+	start := time.Now()
 	resp, err := h.client.Do(httpReq)
 	if err != nil {
-		return nil, fmt.Errorf("failed to send request: %w", err)
+		return nil, fmt.Errorf("failed to send %s request to %q: %w", method, path, err)
 	}
 
 	// a streamed request hands the live body back to the caller unread, so large
 	// downloads never round-trip through memory. The caller owns Close.
 	if req.Stream {
-		h.logger.Trace("http-client", "type", "response", "method", method, "url", path, "status", resp.StatusCode, "body", "<streamed>")
+		h.logger.Debug("http-client", "method", method, "url", path, "status", resp.StatusCode, "duration", time.Since(start), "streamed", true)
 		return &Response{
 			StatusCode: resp.StatusCode,
 			Reader:     resp.Body,
@@ -284,10 +284,17 @@ func (h httpClient) do(ctx context.Context, method string, req Request, body []b
 	// read response body
 	data, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read response body: %w", err)
+		readErr := fmt.Errorf("failed to read %s response body from %q with status %d: %w", method, path, resp.StatusCode, err)
+		// hand back the bytes that did arrive, so a caller can still see what the peer sent
+		return &Response{
+			StatusCode: resp.StatusCode,
+			Body:       data,
+			Headers:    resp.Header,
+			Error:      readErr,
+		}, readErr
 	}
 
-	h.logger.Trace("http-client", "type", "response", "method", method, "url", path, "status", resp.StatusCode, "body", string(data))
+	h.logger.Debug("http-client", "method", method, "url", path, "status", resp.StatusCode, "duration", time.Since(start), "bytes", len(data))
 
 	return &Response{
 		StatusCode: resp.StatusCode,
@@ -302,17 +309,13 @@ func (h httpClient) doStream(ctx context.Context, method string, stream chan Str
 		return fmt.Errorf("failed to build request URI: %w", err)
 	}
 
-	logCtx := []any{"type", "stream-request", "method", method, "url", path, "query", req.Query, "req-body", limitBodySize(body, size)}
-
-	h.logger.Debug("http-client", logCtx...)
-
 	var bodyReader io.Reader
 	if body != nil {
 		bodyReader = bytes.NewBuffer(body)
 	}
 	httpReq, err := http.NewRequestWithContext(ctx, method, path, bodyReader)
 	if err != nil {
-		return fmt.Errorf("failed to create request: %w", err)
+		return fmt.Errorf("failed to create %s stream request to %q: %w", method, path, err)
 	}
 
 	for k, v := range headers {
@@ -322,72 +325,56 @@ func (h httpClient) doStream(ctx context.Context, method string, stream chan Str
 	httpReq.Header.Set("Cache-Control", "no-cache")
 	httpReq.Header.Set("Connection", "keep-alive")
 
+	start := time.Now()
 	//nolint:bodyclose // body is closed by the deferred close in the non-OK branch below and in the consumer goroutine on success
 	resp, err := h.client.Do(httpReq)
 	if err != nil {
-		return fmt.Errorf("failed to send request: %w", err)
+		return fmt.Errorf("failed to send %s stream request to %q: %w", method, path, err)
 	}
-
-	logCtx = logArgs(logCtx, "status", resp.StatusCode)
-
-	h.logger.Debug("http-client", logArgs(logCtx, "request", "sent")...)
 
 	if resp.StatusCode != http.StatusOK {
 		defer resp.Body.Close()
 		defer close(stream)
-		respBody, err := io.ReadAll(resp.Body)
-		if err != nil {
-			err = fmt.Errorf("failed to read error response body: %w", err)
-			h.logger.Error("http-client", logArgs(logCtx, "error", err)...)
-			return err
+
+		// the body is read even when the read fails part way, so whatever arrived
+		// still reaches the caller on the stream and on the error
+		respBody, readErr := io.ReadAll(resp.Body)
+		streamErr := error(&StatusError{Method: method, URL: path, StatusCode: resp.StatusCode, Body: respBody})
+		if readErr != nil {
+			streamErr = fmt.Errorf("failed to read %s error response body from %q with status %d: %w", method, path, resp.StatusCode, readErr)
 		}
 
-		err = fmt.Errorf("unexpected status code: %d: %s", resp.StatusCode, string(respBody))
-
-		h.logger.Error("http-client", logArgs(logCtx, "stream", "started-with-error", "error", err)...)
+		h.logger.Debug("http-client", "method", method, "url", path, "status", resp.StatusCode, "duration", time.Since(start), "chunks", 0, "bytes", len(respBody))
 
 		stream <- StreamResponse{
 			Type:       StreamResponseTypeEOF,
 			StatusCode: resp.StatusCode,
 			Headers:    resp.Header,
-			Error:      err,
+			Error:      streamErr,
 			Body:       respBody,
 		}
 
-		return err
+		return streamErr
 	}
-
-	h.logger.Debug("http-client", logArgs(logCtx, "stream", "started")...)
 
 	go func() {
 		defer resp.Body.Close()
 		defer close(stream)
 
+		var chunks, read int
+		defer func() {
+			h.logger.Debug("http-client", "method", method, "url", path, "status", resp.StatusCode, "duration", time.Since(start), "chunks", chunks, "bytes", read)
+		}()
+
 		reader := bufio.NewReader(resp.Body)
 		for {
-			line, err := reader.ReadBytes('\n')
-			h.logger.Debug("http-client", logArgs(logCtx, "raw-line", string(line))...)
-			if err != nil {
-				stream <- StreamResponse{
-					Type:       StreamResponseTypeEOF,
-					StatusCode: resp.StatusCode,
-					Headers:    resp.Header,
-					Error:      fmt.Errorf("failed to read response body: %w", err),
-				}
-				h.logger.Error("http-client", logArgs(logCtx, "stream", "ended-with-error", "error", err)...)
-				break
-			}
+			line, readErr := reader.ReadBytes('\n')
+			read += len(line)
 
-			resType := StreamResponseTypeData
 			line = bytes.TrimSpace(line)
-
-			if len(line) == 0 {
-				continue
-			}
-			h.logger.Debug("http-client", logArgs(logCtx, "type", resType, "pre-processed-line", string(line))...)
-			if bytes.HasPrefix(line, []byte("data: ")) {
-				line = bytes.TrimPrefix(line, []byte("data: "))
-				if bytes.Equal(line, []byte("[DONE]")) {
+			if len(line) > 0 {
+				resType, payload, done := decodeStreamLine(line)
+				if done {
 					stream <- StreamResponse{
 						Type:       StreamResponseTypeEOF,
 						StatusCode: resp.StatusCode,
@@ -395,30 +382,57 @@ func (h httpClient) doStream(ctx context.Context, method string, stream chan Str
 					}
 					return
 				}
-			} else if bytes.HasPrefix(line, []byte("event: ")) {
-				resType = StreamResponseTypeEvent
-				line = bytes.TrimPrefix(line, []byte("event: "))
-			} else if bytes.HasPrefix(line, []byte("id: ")) {
-				resType = StreamResponseTypeID
-				line = bytes.TrimPrefix(line, []byte("id: "))
-			} else if bytes.HasPrefix(line, []byte("retry: ")) {
-				resType = StreamResponseTypeRetry
-				line = bytes.TrimPrefix(line, []byte("retry: "))
-			} else if bytes.HasPrefix(line, []byte(":")) {
-				resType = StreamResponseTypeComment
+				chunks++
+				stream <- StreamResponse{
+					Type:       resType,
+					StatusCode: resp.StatusCode,
+					Headers:    resp.Header,
+					Body:       payload,
+				}
 			}
 
-			stream <- StreamResponse{
-				Type:       resType,
-				StatusCode: resp.StatusCode,
-				Headers:    resp.Header,
-				Body:       line,
+			if readErr != nil {
+				// a stream that runs out is a stream that finished, so only a genuine
+				// read failure carries an error to the caller
+				var endErr error
+				if !errors.Is(readErr, io.EOF) {
+					endErr = fmt.Errorf("failed to read %s stream body from %q: %w", method, path, readErr)
+				}
+				stream <- StreamResponse{
+					Type:       StreamResponseTypeEOF,
+					StatusCode: resp.StatusCode,
+					Headers:    resp.Header,
+					Error:      endErr,
+				}
+				return
 			}
-			h.logger.Debug("http-client", logArgs(logCtx, "type", resType, "sse-processed-line", string(line))...)
 		}
 	}()
 
 	return nil
+}
+
+// decodeStreamLine classifies one trimmed Server-Sent Events line and strips its
+// field prefix. The done result reports the [DONE] sentinel that ends a stream.
+func decodeStreamLine(line []byte) (StreamResponseType, []byte, bool) {
+	switch {
+	case bytes.HasPrefix(line, []byte("data: ")):
+		payload := bytes.TrimPrefix(line, []byte("data: "))
+		if bytes.Equal(payload, []byte("[DONE]")) {
+			return StreamResponseTypeEOF, nil, true
+		}
+		return StreamResponseTypeData, payload, false
+	case bytes.HasPrefix(line, []byte("event: ")):
+		return StreamResponseTypeEvent, bytes.TrimPrefix(line, []byte("event: ")), false
+	case bytes.HasPrefix(line, []byte("id: ")):
+		return StreamResponseTypeID, bytes.TrimPrefix(line, []byte("id: ")), false
+	case bytes.HasPrefix(line, []byte("retry: ")):
+		return StreamResponseTypeRetry, bytes.TrimPrefix(line, []byte("retry: ")), false
+	case bytes.HasPrefix(line, []byte(":")):
+		return StreamResponseTypeComment, line, false
+	default:
+		return StreamResponseTypeData, line, false
+	}
 }
 
 func (h httpClient) buildRequestParams(req Request) (string, map[string]string, error) {

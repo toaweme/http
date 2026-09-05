@@ -122,11 +122,16 @@ Construction options stay out of your way by default - `http.DefaultClient` and 
 ```go
 client := http.NewClient(cfg,
 	http.WithHTTPClient(&http.Client{Timeout: 5 * time.Second}), // custom timeout/transport, or a test stub
-	http.WithLogger(logger),                                     // any leveled logger
+	http.WithLogger(logger),                                     // anything with a Debug method
 )
 ```
 
-`Logger` is a minimal `Trace/Debug/Info/Warn/Error` interface, satisfied structurally by `github.com/toaweme/log` with no adapter.
+`Logger` is a one-method `Debug(msg string, args ...any)` interface, satisfied structurally by `github.com/toaweme/log` and by `*slog.Logger`.
+
+- one record per request, after it completes, with method, url, status, duration and bytes
+- one record per stream, when it ends, plus the chunk count
+- never a body, never a header map, at any level
+- non-2xx is not logged. The body comes back on `Response.Body`, or on `StreamResponse.Body` and a `*StatusError`
 
 ## The server
 
@@ -190,11 +195,11 @@ hub.Publish("updates", sse.Event{Type: "tick", Data: "hello"})
 - **Zero dependencies** - pure stdlib `net/http`, nothing transitive.
 - **Struct requests, one method per verb** - `Get`, `Post`, `Put`, `Patch`, `Delete` returning `*Response` (status, body, headers).
 - **Unbuffered responses** - `Request.Stream` skips buffering and hands back the live body as `Response.Reader`, with `*Response` itself an `io.ReadCloser`.
-- **SSE streaming** - `GetStream` / `PostStream` decode `data:`/`event:`/`id:`/`retry:`/comment lines into typed `StreamResponse` values, with explicit EOF and errors.
+- **SSE streaming** - `GetStream` / `PostStream` decode `data:`/`event:`/`id:`/`retry:`/comment lines into typed `StreamResponse` values, with an explicit EOF carrying an error only on a real read failure.
 - **Config-driven identity** - base URL, user-agent, platform, app version, client/service IDs, and custom headers, each behind a documented header constant.
 - **Per-request overrides** - path, query, headers, request ID, session ID.
 - **Swappable transport** - `WithHTTPClient` for custom timeouts/transports or a stub in tests; `http.DefaultClient` by default.
-- **Injectable logger** - leveled `Logger` interface, silent by default, satisfied structurally by `github.com/toaweme/log`.
+- **Injectable logger** - one-method `Logger` interface, silent by default, one record per request, never a body.
 - **JSON helpers** - `JSON(v)` and generic `FromJSON[T](body)`.
 
 **Server (`github.com/toaweme/http/server`)**
