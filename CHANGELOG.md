@@ -5,6 +5,20 @@ All notable changes to this project are documented here, newest first.
 Entries are generated from [Conventional Commits](https://www.conventionalcommits.org)
 and grouped by change type. This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] - 2026-09-05
+
+### Refactors
+
+- Reduce client logging to one debug record per request by [@iberflow](https://github.com/iberflow) in [#10](https://github.com/toaweme/http/pull/10).
+
+### CI & Build
+
+- Pin go toolchain to 1.26 instead of stable by [@iberflow](https://github.com/iberflow) in [ff33bbf](https://github.com/toaweme/http/commit/ff33bbff9e9fe1ad8574254ceff19767a27ebe74).
+
+### Chores & Other
+
+- **Deps:** Bump actions/setup-go by [@dependabot[bot]](https://github.com/dependabot[bot]) in [#5](https://github.com/toaweme/http/pull/5).
+
 ## [0.4.0] - 2026-08-04
 
 ### Chores & Other
@@ -183,12 +197,14 @@ and grouped by change type. This project adheres to [Semantic Versioning](https:
 - Cleanup by [@iberflow](https://github.com/iberflow) in [aea82ee](https://github.com/toaweme/http/commit/aea82eee793ebba2e51b2fb006f90593261683a7).
 - Cleanup by [@iberflow](https://github.com/iberflow) in [13f2bd4](https://github.com/toaweme/http/commit/13f2bd4f34b15c79ec25e6ea8275908dc91eef9a).
 
+[0.5.0]: https://github.com/toaweme/http/compare/server/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/toaweme/http/compare/server/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/toaweme/http/compare/server/v0.2.1...v0.3.0
 [0.2.1]: https://github.com/toaweme/http/compare/server/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/toaweme/http/compare/server/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/toaweme/http/compare/server/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/toaweme/http/releases/tag/v0.1.0
+[server/v0.4.0]: https://github.com/toaweme/http/compare/server/v0.3.0...server/v0.4.0
 [server/v0.3.0]: https://github.com/toaweme/http/compare/server/v0.2.1...server/v0.3.0
 [server/v0.2.1]: https://github.com/toaweme/http/compare/v0.2.1...server/v0.2.1
 [server/v0.2.0]: https://github.com/toaweme/http/compare/server/v0.1.1...server/v0.2.0
