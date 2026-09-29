@@ -435,7 +435,7 @@ func Test_Client_Stream_LogsOnceAtEnd(t *testing.T) {
 	if err := client.GetStream(context.Background(), stream, Request{Path: "/sse"}); err != nil {
 		t.Fatalf("GetStream returned error: %v", err)
 	}
-	for range stream { //nolint:revive // draining the stream is the point
+	for range stream {
 	}
 
 	records := rec.all()
@@ -503,7 +503,7 @@ func Test_Client_Stream_NonOKStatusErrorCarriesBody(t *testing.T) {
 	if strings.Contains(err.Error(), "bad model") {
 		t.Errorf("error message %q quotes the response body", err.Error())
 	}
-	for range stream { //nolint:revive // draining the stream is the point
+	for range stream {
 	}
 }
 
