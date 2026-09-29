@@ -22,7 +22,7 @@ jobs:
         with:
           go-version: '1.26'
 
-      - uses: toaweme/care@777d7dc27512e469bcae1be0b4036fa30dd9a8d9 # v0.9.5
+      - uses: toaweme/care@7c1be005491b89ec9a83013616abfd71fda71899 # v0.9.6
         with:
           strict: true
 
@@ -34,7 +34,7 @@ jobs:
         with:
           fetch-depth: 0   # care needs full history to derive changelog notes
 
-      - uses: toaweme/care@777d7dc27512e469bcae1be0b4036fa30dd9a8d9 # v0.9.5
+      - uses: toaweme/care@7c1be005491b89ec9a83013616abfd71fda71899 # v0.9.6
         with:
           install-only: true
 
