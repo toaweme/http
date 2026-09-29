@@ -34,7 +34,7 @@ jobs:
           publish-url: https://code.toawe.me/ingest?kind=care
 
       # publish the client module's code view to code.toawe.me
-      - uses: toaweme/codereport@10bd1b60f6525ae86af9ba719ceedfc06c160271 # v0.3.0
+      - uses: toaweme/codereport@4339d9a8925f49e96235dea80a87a5c2bf4d3746 # v0.4.0
         with:
           publish-url: https://code.toawe.me/ingest?kind=code
 
@@ -58,7 +58,7 @@ jobs:
           publish-url: https://code.toawe.me/ingest?kind=care
 
       # publish the server module's code view to code.toawe.me
-      - uses: toaweme/codereport@10bd1b60f6525ae86af9ba719ceedfc06c160271 # v0.3.0
+      - uses: toaweme/codereport@4339d9a8925f49e96235dea80a87a5c2bf4d3746 # v0.4.0
         with:
           dir: server
           publish-url: https://code.toawe.me/ingest?kind=code
