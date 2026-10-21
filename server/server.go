@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	"time"
 )
@@ -21,39 +22,47 @@ type Config struct {
 	Port int
 }
 
-// Option mutates the underlying *http.Server during construction. Options run
+// Option mutates the Server during construction. Options run
 // after the defaults (Addr, Handler, ReadHeaderTimeout) are applied, so they
 // can override anything.
-type Option func(*http.Server)
+type Option func(*Server)
 
 // WithReadHeaderTimeout sets how long the server waits for request headers.
 // Pass 0 to disable it (not recommended - exposes the server to Slowloris).
 func WithReadHeaderTimeout(d time.Duration) Option {
-	return func(srv *http.Server) { srv.ReadHeaderTimeout = d }
+	return func(s *Server) { s.http.ReadHeaderTimeout = d }
 }
 
 // WithReadTimeout sets the maximum duration for reading an entire request.
 func WithReadTimeout(d time.Duration) Option {
-	return func(srv *http.Server) { srv.ReadTimeout = d }
+	return func(s *Server) { s.http.ReadTimeout = d }
 }
 
 // WithWriteTimeout sets the maximum duration before timing out response writes.
 func WithWriteTimeout(d time.Duration) Option {
-	return func(srv *http.Server) { srv.WriteTimeout = d }
+	return func(s *Server) { s.http.WriteTimeout = d }
 }
 
 // WithIdleTimeout sets how long to keep a keep-alive connection idle.
 func WithIdleTimeout(d time.Duration) Option {
-	return func(srv *http.Server) { srv.IdleTimeout = d }
+	return func(s *Server) { s.http.IdleTimeout = d }
+}
+
+// WithListener serves on a listener the caller opened,
+// such as one bound to port 0 whose chosen port the caller needed before serving.
+// Config's host and port are then ignored.
+func WithListener(l net.Listener) Option {
+	return func(s *Server) { s.listener = l }
 }
 
 // Server wraps net/http.Server around a *Router. Implements the
 // {Name, Start, Stop} contract expected by go-shared/service.Service.
 type Server struct {
-	config Config
-	router *Router
-	logger Logger
-	http   *http.Server
+	config   Config
+	router   *Router
+	logger   Logger
+	http     *http.Server
+	listener net.Listener
 }
 
 // NewServer wires a Server around the router. A github.com/toaweme/log logger
@@ -66,10 +75,11 @@ func NewServer(cfg Config, router *Router, logger Logger, opts ...Option) *Serve
 		Handler:           router,
 		ReadHeaderTimeout: defaultReadHeaderTimeout,
 	}
+	s := &Server{config: cfg, router: router, logger: logger, http: srv}
 	for _, opt := range opts {
-		opt(srv)
+		opt(s)
 	}
-	return &Server{config: cfg, router: router, logger: logger, http: srv}
+	return s
 }
 
 // HTTP returns the underlying *http.Server for callers that need to set fields
@@ -81,15 +91,22 @@ func (s *Server) HTTP() *http.Server { return s.http }
 // Name identifies the service in a service registry.
 func (s *Server) Name() string { return "http" }
 
-// Start serves until Stop is called. It blocks and returns nil on a clean
-// shutdown.
+// Start serves until Stop is called, on the listener given with WithListener
+// or else on Config's address. It blocks and returns nil on a clean shutdown.
 func (s *Server) Start() error {
 	s.router.LogRoutes(s.logger)
 
-	s.logger.Info("service", "http", "server", "addr", "http://"+s.http.Addr)
-	if err := s.http.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+	addr := s.http.Addr
+	serve := s.http.ListenAndServe
+	if s.listener != nil {
+		addr = s.listener.Addr().String()
+		serve = func() error { return s.http.Serve(s.listener) }
+	}
+
+	s.logger.Info("service", "http", "server", "addr", "http://"+addr)
+	if err := serve(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		s.logger.Error("service", "http", "server", "error", err)
-		return err
+		return fmt.Errorf("failed to serve on %s: %w", addr, err)
 	}
 	return nil
 }

@@ -135,3 +135,45 @@ func waitReachable(t *testing.T, url string) {
 	}
 	t.Fatalf("server never became reachable at %s", url)
 }
+
+func Test_Server_StartWithListener(t *testing.T) {
+	tests := []struct {
+		name string
+		path string
+		want int
+	}{
+		{name: "a mounted route answers on the chosen port", path: "/ping", want: http.StatusNoContent},
+		{name: "an unmounted route is not found", path: "/missing", want: http.StatusNotFound},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			r := NewRouter()
+			r.Get("/ping", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) })
+			l, err := net.Listen("tcp", "127.0.0.1:0")
+			if err != nil {
+				t.Fatalf("failed to listen: %v", err)
+			}
+			s := NewServer(Config{Host: "127.0.0.1", Port: 1}, r, nopLogger{}, WithListener(l))
+			done := make(chan error, 1)
+			go func() { done <- s.Start() }()
+
+			resp, err := http.Get(fmt.Sprintf("http://%s%s", l.Addr(), tt.path))
+			if err != nil {
+				t.Fatalf("failed to reach the server: %v", err)
+			}
+			resp.Body.Close()
+			if resp.StatusCode != tt.want {
+				t.Fatalf("status = %d, want %d", resp.StatusCode, tt.want)
+			}
+
+			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+			defer cancel()
+			if err := s.Stop(ctx); err != nil {
+				t.Fatalf("Stop: %v", err)
+			}
+			if err := <-done; err != nil {
+				t.Fatalf("Start returned %v after Stop, want nil", err)
+			}
+		})
+	}
+}
