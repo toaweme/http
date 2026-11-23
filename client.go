@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strings"
 	"time"
 )
 
@@ -244,6 +245,7 @@ func (h httpClient) do(ctx context.Context, method string, req Request, body []b
 	if err != nil {
 		return nil, fmt.Errorf("failed to build request URI: %w", err)
 	}
+	shown := redactURL(path)
 
 	var httpReq *http.Request
 	// prepare request
@@ -253,7 +255,7 @@ func (h httpClient) do(ctx context.Context, method string, req Request, body []b
 		httpReq, err = http.NewRequestWithContext(ctx, method, path, http.NoBody)
 	}
 	if err != nil {
-		return nil, fmt.Errorf("failed to create %s request to %q: %w", method, path, err)
+		return nil, fmt.Errorf("failed to create %s request to %q: %w", method, shown, err)
 	}
 
 	// set headers
@@ -265,13 +267,14 @@ func (h httpClient) do(ctx context.Context, method string, req Request, body []b
 	start := time.Now()
 	resp, err := h.client.Do(httpReq)
 	if err != nil {
-		return nil, fmt.Errorf("failed to send %s request to %q: %w", method, path, err)
+		redactError(err)
+		return nil, fmt.Errorf("failed to send %s request to %q: %w", method, shown, err)
 	}
 
 	// a streamed request hands the live body back to the caller unread, so large
 	// downloads never round-trip through memory. The caller owns Close.
 	if req.Stream {
-		h.logger.Debug("http-client", "method", method, "url", path, "status", resp.StatusCode, "duration", time.Since(start), "streamed", true)
+		h.logger.Debug("http-client", "method", method, "url", shown, "status", resp.StatusCode, "duration", time.Since(start), "streamed", true)
 		return &Response{
 			StatusCode: resp.StatusCode,
 			Reader:     resp.Body,
@@ -284,7 +287,7 @@ func (h httpClient) do(ctx context.Context, method string, req Request, body []b
 	// read response body
 	data, err := io.ReadAll(resp.Body)
 	if err != nil {
-		readErr := fmt.Errorf("failed to read %s response body from %q with status %d: %w", method, path, resp.StatusCode, err)
+		readErr := fmt.Errorf("failed to read %s response body from %q with status %d: %w", method, shown, resp.StatusCode, err)
 		// hand back the bytes that did arrive, so a caller can still see what the peer sent
 		return &Response{
 			StatusCode: resp.StatusCode,
@@ -294,7 +297,7 @@ func (h httpClient) do(ctx context.Context, method string, req Request, body []b
 		}, readErr
 	}
 
-	h.logger.Debug("http-client", "method", method, "url", path, "status", resp.StatusCode, "duration", time.Since(start), "bytes", len(data))
+	h.logger.Debug("http-client", "method", method, "url", shown, "status", resp.StatusCode, "duration", time.Since(start), "bytes", len(data))
 
 	return &Response{
 		StatusCode: resp.StatusCode,
@@ -308,6 +311,7 @@ func (h httpClient) doStream(ctx context.Context, method string, stream chan Str
 	if err != nil {
 		return fmt.Errorf("failed to build request URI: %w", err)
 	}
+	shown := redactURL(path)
 
 	var bodyReader io.Reader
 	if body != nil {
@@ -315,7 +319,7 @@ func (h httpClient) doStream(ctx context.Context, method string, stream chan Str
 	}
 	httpReq, err := http.NewRequestWithContext(ctx, method, path, bodyReader)
 	if err != nil {
-		return fmt.Errorf("failed to create %s stream request to %q: %w", method, path, err)
+		return fmt.Errorf("failed to create %s stream request to %q: %w", method, shown, err)
 	}
 
 	for k, v := range headers {
@@ -329,7 +333,8 @@ func (h httpClient) doStream(ctx context.Context, method string, stream chan Str
 	//nolint:bodyclose // body is closed by the deferred close in the non-OK branch below and in the consumer goroutine on success
 	resp, err := h.client.Do(httpReq)
 	if err != nil {
-		return fmt.Errorf("failed to send %s stream request to %q: %w", method, path, err)
+		redactError(err)
+		return fmt.Errorf("failed to send %s stream request to %q: %w", method, shown, err)
 	}
 
 	if resp.StatusCode != http.StatusOK {
@@ -339,12 +344,12 @@ func (h httpClient) doStream(ctx context.Context, method string, stream chan Str
 		// the body is read even when the read fails part way, so whatever arrived
 		// still reaches the caller on the stream and on the error
 		respBody, readErr := io.ReadAll(resp.Body)
-		streamErr := error(&StatusError{Method: method, URL: path, StatusCode: resp.StatusCode, Body: respBody})
+		streamErr := error(&StatusError{Method: method, URL: shown, StatusCode: resp.StatusCode, Body: respBody})
 		if readErr != nil {
-			streamErr = fmt.Errorf("failed to read %s error response body from %q with status %d: %w", method, path, resp.StatusCode, readErr)
+			streamErr = fmt.Errorf("failed to read %s error response body from %q with status %d: %w", method, shown, resp.StatusCode, readErr)
 		}
 
-		h.logger.Debug("http-client", "method", method, "url", path, "status", resp.StatusCode, "duration", time.Since(start), "chunks", 0, "bytes", len(respBody))
+		h.logger.Debug("http-client", "method", method, "url", shown, "status", resp.StatusCode, "duration", time.Since(start), "chunks", 0, "bytes", len(respBody))
 
 		stream <- StreamResponse{
 			Type:       StreamResponseTypeEOF,
@@ -363,7 +368,7 @@ func (h httpClient) doStream(ctx context.Context, method string, stream chan Str
 
 		var chunks, read int
 		defer func() {
-			h.logger.Debug("http-client", "method", method, "url", path, "status", resp.StatusCode, "duration", time.Since(start), "chunks", chunks, "bytes", read)
+			h.logger.Debug("http-client", "method", method, "url", shown, "status", resp.StatusCode, "duration", time.Since(start), "chunks", chunks, "bytes", read)
 		}()
 
 		reader := bufio.NewReader(resp.Body)
@@ -396,7 +401,7 @@ func (h httpClient) doStream(ctx context.Context, method string, stream chan Str
 				// read failure carries an error to the caller
 				var endErr error
 				if !errors.Is(readErr, io.EOF) {
-					endErr = fmt.Errorf("failed to read %s stream body from %q: %w", method, path, readErr)
+					endErr = fmt.Errorf("failed to read %s stream body from %q: %w", method, shown, readErr)
 				}
 				stream <- StreamResponse{
 					Type:       StreamResponseTypeEOF,
@@ -410,6 +415,34 @@ func (h httpClient) doStream(ctx context.Context, method string, stream chan Str
 	}()
 
 	return nil
+}
+
+// redactURL is the address a message may name for a request, which leaves
+// out its query, fragment and user info. A caller may have written a
+// credential into any of them, and an error or a log line is read by far more
+// people than the request was meant for.
+func redactURL(raw string) string {
+	u, err := url.Parse(raw)
+	if err != nil {
+		before, _, _ := strings.Cut(raw, "?")
+		return before
+	}
+	u.RawQuery = ""
+	u.ForceQuery = false
+	u.Fragment = ""
+	u.RawFragment = ""
+	u.User = nil
+	return u.String()
+}
+
+// redactError takes the query out of the address a failed send names, which
+// the standard client writes in whole, including that of a redirect it was
+// about to follow.
+func redactError(err error) {
+	var urlErr *url.Error
+	if errors.As(err, &urlErr) {
+		urlErr.URL = redactURL(urlErr.URL)
+	}
 }
 
 // decodeStreamLine classifies one trimmed Server-Sent Events line and strips its

@@ -717,3 +717,47 @@ func field(record []any, key string) (any, bool) {
 	}
 	return nil, false
 }
+
+func Test_Client_ErrorsLeaveOutTheQuery(t *testing.T) {
+	failing := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/away":
+			http.Redirect(w, r, "http://elsewhere.invalid/collect?"+r.URL.RawQuery, http.StatusFound)
+		default:
+			w.WriteHeader(http.StatusUnauthorized)
+		}
+	}))
+	defer failing.Close()
+	closed := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+	closedURL := closed.URL
+	closed.Close()
+
+	tests := []struct {
+		name string
+		send func(context.Context) error
+	}{
+		{name: "a send that never connects", send: func(ctx context.Context) error {
+			_, err := newTestClient(t, closedURL).Get(ctx, GetRequest{Request: Request{Path: "/x", Query: url.Values{"key": {"secret"}}}})
+			return err
+		}},
+		{name: "a redirect that never connects", send: func(ctx context.Context) error {
+			_, err := newTestClient(t, failing.URL).Get(ctx, GetRequest{Request: Request{Path: "/away", Query: url.Values{"key": {"secret"}}}})
+			return err
+		}},
+		{name: "a stream refused by its status", send: func(ctx context.Context) error {
+			stream := make(chan StreamResponse, 1)
+			return newTestClient(t, failing.URL).GetStream(ctx, stream, Request{Path: "/x", Query: url.Values{"key": {"secret"}}})
+		}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.send(context.Background())
+			if err == nil {
+				t.Fatalf("got no error, want one")
+			}
+			if strings.Contains(err.Error(), "secret") {
+				t.Fatalf("got error %q, want it to leave out the query", err)
+			}
+		})
+	}
+}
