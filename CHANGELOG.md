@@ -5,6 +5,26 @@ All notable changes to this project are documented here, newest first.
 Entries are generated from [Conventional Commits](https://www.conventionalcommits.org)
 and grouped by change type. This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0] - 2026-11-23
+
+### Features
+
+- Let a server serve on a listener the caller opened by [@iberflow](https://github.com/iberflow) in [d56ec56](https://github.com/toaweme/http/commit/d56ec56cc782cf5048746bf622fbfaa2186c698e).
+
+### Fixes
+
+- Keep request queries out of errors and logs by [@iberflow](https://github.com/iberflow) in [238d535](https://github.com/toaweme/http/commit/238d5353cd383322f28a7551b7b53a8d66c7a311).
+
+### CI & Build
+
+- Bump codereport to v0.4.0 by [@iberflow](https://github.com/iberflow) in [5d8ac58](https://github.com/toaweme/http/commit/5d8ac586c890bc64b8def1e4f495d01222e7633a).
+- Bump care to v0.9.6 by [@iberflow](https://github.com/iberflow) in [a94c898](https://github.com/toaweme/http/commit/a94c8981ee3b2e4f269126b55cf6ac345eb16894).
+- Bump care to v0.9.5 and pin actions to latest by [@iberflow](https://github.com/iberflow) in [4d43d5c](https://github.com/toaweme/http/commit/4d43d5cf616700ea44b686746da47ae76f3ad7e2).
+
+### Chores & Other
+
+- Drop nolint directives golangci-lint v2.14.0 reports as unused by [@iberflow](https://github.com/iberflow) in [66d2640](https://github.com/toaweme/http/commit/66d2640392cfe0ec4f2d3a9707ce411e52e544f2).
+
 ## [0.5.0] - 2026-09-05
 
 ### Refactors
@@ -197,6 +217,7 @@ and grouped by change type. This project adheres to [Semantic Versioning](https:
 - Cleanup by [@iberflow](https://github.com/iberflow) in [aea82ee](https://github.com/toaweme/http/commit/aea82eee793ebba2e51b2fb006f90593261683a7).
 - Cleanup by [@iberflow](https://github.com/iberflow) in [13f2bd4](https://github.com/toaweme/http/commit/13f2bd4f34b15c79ec25e6ea8275908dc91eef9a).
 
+[0.6.0]: https://github.com/toaweme/http/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/toaweme/http/compare/server/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/toaweme/http/compare/server/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/toaweme/http/compare/server/v0.2.1...v0.3.0
